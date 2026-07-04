@@ -131,9 +131,7 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
       <div style={{ position: 'sticky', top: 0, zIndex: 40, background: '#F4F6FA' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto', padding: '26px 26px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#14161B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#E5484D' }}></div>
-            </div>
+            <span style={{ fontSize: 22 }}>🖥️</span>
             <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.2px', color: '#14161B' }}>No Route to Host</span>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
