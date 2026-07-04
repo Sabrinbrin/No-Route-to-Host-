@@ -4,7 +4,7 @@
  */
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, sep } from 'node:path';
 import {
   Scenario,
   GameState,
@@ -44,6 +44,8 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
 };
 
 // ===== API Handlers =====
@@ -60,8 +62,12 @@ function handleApi(path: string, body: any): any {
       currentGameState = loadScenario(scenario);
       return {
         success: true,
+        id: scenario.id,
+        title: scenario.title,
+        difficulty: scenario.difficulty,
         ticket: scenario.ticket,
         topology: currentGameState.network,
+        winCondition: scenario.win_condition,
         layout: scenario.layout || {},
       };
     }
@@ -293,8 +299,22 @@ const server = createServer((req, res) => {
     return;
   }
 
-  let filePath = url;
-  const fullPath = join(publicDir, filePath);
+  // Strip query string and decode, then resolve and confirm the path stays
+  // within publicDir — prevents traversal like GET /../../etc/passwd.
+  let requestPath: string;
+  try {
+    requestPath = decodeURIComponent(url.split('?')[0]);
+  } catch {
+    res.writeHead(400);
+    res.end('Bad request');
+    return;
+  }
+  const fullPath = resolve(publicDir, '.' + requestPath);
+  if (fullPath !== publicDir && !fullPath.startsWith(publicDir + sep)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
 
   try {
     if (!existsSync(fullPath)) {
@@ -302,9 +322,11 @@ const server = createServer((req, res) => {
       res.end('Not found');
       return;
     }
-    const content = readFileSync(fullPath, 'utf-8');
     const ext = extname(fullPath);
     const mime = MIME[ext] || 'text/plain';
+    // Read binary assets (fonts, images) as a Buffer so bytes aren't mangled
+    // by utf-8 decoding; text assets can be read either way.
+    const content = readFileSync(fullPath);
     res.writeHead(200, { 'Content-Type': mime });
     res.end(content);
   } catch {
