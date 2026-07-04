@@ -186,9 +186,9 @@
       <div style="flex:none;background:#fff;border-bottom:1px solid #E3E7EE;padding:12px 22px;display:flex;align-items:center;gap:16px">
         <div onClick="{{ goDash }}" style="font-size:13px;color:#5B6472;cursor:pointer;display:flex;align-items:center;gap:5px">← Exit</div>
         <div style="width:1px;height:20px;background:#E3E7EE"></div>
-        <div style="width:26px;height:26px;border-radius:7px;background:#14161B;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px">1</div>
+        <div style="width:26px;height:26px;border-radius:7px;background:#14161B;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px">{{ scenarioNum }}</div>
         <div>
-          <div style="font-size:14.5px;font-weight:600;letter-spacing:-.2px">Wrong access VLAN</div>
+          <div style="font-size:14.5px;font-weight:600;letter-spacing:-.2px">{{ scenarioTitle }}</div>
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
           <div style="{{ statusPillStyle }}">{{ statusPillText }}</div>
@@ -205,7 +205,7 @@
             <span style="width:11px;height:11px;border-radius:50%;background:#F85149"></span>
             <span style="width:11px;height:11px;border-radius:50%;background:#F5A623"></span>
             <span style="width:11px;height:11px;border-radius:50%;background:#3FB950"></span>
-            <span style="margin-left:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8B949E">SW1 — console session</span>
+            <span style="margin-left:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8B949E">{{ termHeader }}</span>
             <div onClick="{{ resetScenario }}" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8B949E;cursor:pointer;border:1px solid #30363d;padding:3px 9px;border-radius:6px">reset</div>
           </div>
           <div class="sy" onClick="{{ focusInput }}" style="flex:1;overflow:auto;padding:16px 18px;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;min-height:0" ref="{{ setScrollRef }}">
@@ -224,41 +224,35 @@
           <!-- ticket -->
           <div style="background:#fff;border:1px solid #E3E7EE;border-radius:13px;overflow:hidden">
             <div style="padding:12px 16px;background:#14161B;color:#fff;display:flex;align-items:center;justify-content:between;gap:10px">
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#F5A623">TICKET #4471</span>
-              <span style="margin-left:auto;font-size:11px;font-weight:600;background:rgba(229,72,77,.2);color:#FF8b8e;padding:2px 8px;border-radius:6px">P2</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#F5A623">{{ ticketId }}</span>
+              <span style="margin-left:auto;font-size:11px;font-weight:600;background:rgba(229,72,77,.2);color:#FF8b8e;padding:2px 8px;border-radius:6px">{{ ticketPriority }}</span>
             </div>
             <div style="padding:14px 16px">
-              <div style="font-size:14px;font-weight:600;letter-spacing:-.2px">Host A can’t reach its gateway</div>
-              <p style="font-size:13px;color:#5B6472;line-height:1.55;margin:8px 0 0">Host A (10.0.10.5) reports it cannot reach its default gateway 10.0.10.1. Other hosts on the floor are fine. “Nothing changed.”</p>
+              <div style="font-size:14px;font-weight:600;letter-spacing:-.2px">{{ ticketTitle }}</div>
+              <p style="font-size:13px;color:#5B6472;line-height:1.55;margin:8px 0 0">{{ ticketSymptom }}</p>
               <div style="margin-top:12px;padding:10px 12px;background:#F4F6FA;border-radius:9px;font-size:12.5px;color:#14161B">
-                <span style="color:#5B6472">Win condition&nbsp;·&nbsp;</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px">ping HostA → 10.0.10.1</span>
+                <span style="color:#5B6472">Win condition&nbsp;·&nbsp;</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px">{{ winText }}</span>
               </div>
             </div>
           </div>
 
           <!-- topology -->
           <div style="background:#fff;border:1px solid #E3E7EE;border-radius:13px;padding:16px;margin-top:14px">
-            <div style="font-size:11.5px;font-weight:600;color:#5B6472;letter-spacing:.4px;text-transform:uppercase">Topology</div>
-            <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-top:16px">
-              <div style="text-align:center">
-                <div style="width:52px;height:44px;border-radius:9px;border:1.5px solid #C7CEDA;background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">🖥️</div>
-                <div style="font-size:11px;font-weight:600;margin-top:5px">Host A</div>
-                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8B949E">10.0.10.5</div>
-              </div>
-              <div style="flex:1;height:0;border-top:2.5px dashed {{ linkColor }};margin:0 -2px;position:relative;top:-18px;animation:{{ linkAnim }}"></div>
-              <div style="text-align:center">
-                <div style="{{ swBoxStyle }}">🔀</div>
-                <div style="font-size:11px;font-weight:600;margin-top:5px">SW1</div>
-                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8B949E">Gi0/1</div>
-              </div>
-              <div style="flex:1;height:0;border-top:2.5px solid #12A150;margin:0 -2px;position:relative;top:-18px"></div>
-              <div style="text-align:center">
-                <div style="width:52px;height:44px;border-radius:9px;border:1.5px solid #C7CEDA;background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">🌐</div>
-                <div style="font-size:11px;font-weight:600;margin-top:5px">Gateway</div>
-                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8B949E">10.0.10.1</div>
-              </div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:11.5px;font-weight:600;color:#5B6472;letter-spacing:.4px;text-transform:uppercase">Topology</div>
+              <div style="{{ topoStatusStyle }}">{{ topoStatusText }}</div>
             </div>
-            <div style="{{ portBadgeStyle }}">Gi0/1 · {{ portLabel }}</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+              <sc-for list="{{ topoDevices }}" as="dv" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="width:40px;height:36px;flex:none;border-radius:8px;border:1.5px solid #C7CEDA;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px">{{ dv.icon }}</div>
+                  <div style="min-width:0">
+                    <div style="font-size:12px;font-weight:600;letter-spacing:-.1px">{{ dv.name }}</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8B949E">{{ dv.detail }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
           </div>
 
           <!-- hints -->
@@ -279,7 +273,7 @@
           </sc-if>
 
           <div style="display:flex;gap:8px;margin-top:14px;font-size:12px;color:#8B949E;font-family:'IBM Plex Mono',monospace;padding:0 4px">
-            <span>try:</span><span style="color:#5B6472">show vlan brief · ping 10.0.10.1 · ?</span>
+            <span>try:</span><span style="color:#5B6472">{{ tryHint }}</span>
           </div>
         </div>
       </div>
@@ -291,20 +285,20 @@
     <div style="flex:1;max-width:940px;width:100%;margin:0 auto;padding:34px 26px 60px">
       <div style="display:flex;align-items:center;gap:10px;color:#12A150;font-size:13px;font-weight:600">
         <span style="width:22px;height:22px;border-radius:50%;background:#12A150;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px">✓</span>
-        Ticket #4471 resolved
+        {{ debriefResolved }}
       </div>
-      <h1 style="font-size:30px;letter-spacing:-.7px;margin:12px 0 0;font-weight:700">Debrief — Wrong access VLAN</h1>
-      <p style="font-size:14.5px;color:#5B6472;margin:6px 0 0">Here’s what was actually broken, why the symptom looked the way it did, and how your triage scored.</p>
+      <h1 style="font-size:30px;letter-spacing:-.7px;margin:12px 0 0;font-weight:700">Debrief — {{ scenarioTitle }}</h1>
+      <p style="font-size:14.5px;color:#5B6472;margin:6px 0 0">Here’s what the ticket reported, the reachability that was restored, and how your triage scored.</p>
 
       <div style="display:grid;grid-template-columns:1fr 300px;gap:20px;margin-top:26px;align-items:start">
         <div style="display:flex;flex-direction:column;gap:16px">
           <div style="background:#fff;border:1px solid #E3E7EE;border-radius:14px;padding:20px">
-            <div style="font-size:11.5px;font-weight:600;color:#E5484D;letter-spacing:.4px;text-transform:uppercase">The fault</div>
-            <p style="font-size:14.5px;line-height:1.6;margin:9px 0 0">Interface <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#F4F6FA;padding:1px 6px;border-radius:5px">Gi0/1</span> was assigned to <b>VLAN 20 (VOICE)</b>. Host A lives in the 10.0.10.0/24 subnet served by <b>VLAN 10 (DATA)</b>. The access port put it in the wrong broadcast domain.</p>
+            <div style="font-size:11.5px;font-weight:600;color:#E5484D;letter-spacing:.4px;text-transform:uppercase">The reported ticket</div>
+            <p style="font-size:14.5px;line-height:1.6;margin:9px 0 0"><b>{{ ticketTitle }}</b> — {{ ticketSymptom }}</p>
           </div>
           <div style="background:#fff;border:1px solid #E3E7EE;border-radius:14px;padding:20px">
-            <div style="font-size:11.5px;font-weight:600;color:#B9770F;letter-spacing:.4px;text-transform:uppercase">Why the symptom appeared</div>
-            <p style="font-size:14.5px;line-height:1.6;margin:9px 0 0">Host A’s ARP for 10.0.10.1 was broadcast inside VLAN 20 — the VLAN 10 SVI never heard it. Every packet to the gateway timed out, while hosts already in VLAN 10 were unaffected. Classic “only one host is down.”</p>
+            <div style="font-size:11.5px;font-weight:600;color:#B9770F;letter-spacing:.4px;text-transform:uppercase">Reachability restored</div>
+            <p style="font-size:14.5px;line-height:1.6;margin:9px 0 0">Your fix re-satisfied the broken condition. The win condition <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#F4F6FA;padding:1px 6px;border-radius:5px">{{ winText }}</span> now succeeds.</p>
           </div>
           <div style="background:#fff;border:1px solid #E3E7EE;border-radius:14px;padding:20px">
             <div style="font-size:11.5px;font-weight:600;color:#2E5CFF;letter-spacing:.4px;text-transform:uppercase">The diagnostic path</div>
@@ -497,6 +491,9 @@ class Component extends DCLogic {
     loadedScenario: null,
     ticket: null,
     topology: null,
+    scenarioTitle: '',
+    scenarioDifficulty: 1,
+    winCondition: null,
     accessVlan: 20,
     mcpOnline: false,
   };
@@ -548,6 +545,8 @@ class Component extends DCLogic {
     const deviceId = firstNetDev ? firstNetDev.id : '';
     this.setState({
       loadedScenario: scenarioId, ticket: result.ticket, topology: result.topology,
+      scenarioTitle: result.title || scenarioId, scenarioDifficulty: result.difficulty || 1,
+      winCondition: result.winCondition || null,
       currentDevice: deviceId, currentHostname: hostname, currentMode: 'exec',
       lines: this.banner(hostname), inputVal: '', solved: false,
       commandsUsed: 0, wrongConfig: 0, hintsUsed: 0, tick: 0,
@@ -657,11 +656,34 @@ class Component extends DCLogic {
     const K = this.KIND;
     const termLines = s.lines.map(l=>({text:l.t, style:{...(K[l.k]||K.out)}}));
     const el = this.elapsed();
+    // ----- scenario-driven Play / Debrief bindings -----
+    const scIdx = s.scenarioList.findIndex(x=>x.id===s.loadedScenario);
+    const scenarioNum = scIdx>=0 ? scIdx+1 : 1;
+    const scTitle = s.scenarioTitle || (scIdx>=0 && s.scenarioList[scIdx] && s.scenarioList[scIdx].title) || 'Scenario';
+    const diff = s.scenarioDifficulty || 1;
+    const ticketPriority = diff<=1?'P3':diff<=3?'P2':'P1';
+    const ticketId = 'TICKET #'+(4470+scenarioNum);
+    const tk = s.ticket || {};
+    const ticketTitle = tk.title || 'Loading ticket…';
+    const ticketSymptom = tk.symptom || '';
+    const wc = s.winCondition;
+    const devs = (s.topology && s.topology.devices) || [];
+    const nameOf = (id)=>{ const d=devs.find(x=>x.id===id); return d?d.hostname:id; };
+    const winText = wc ? ('ping '+nameOf(wc.source)+' → '+wc.destination) : 'ping <target>';
+    const tryHint = 'show running-config · ping '+(wc?wc.destination:'<target>')+' · ?';
+    const termHeader = (s.currentHostname||'SW1')+' — console session';
+    const debriefResolved = ticketTitle+' resolved';
+    const topoDevices = devs.map(d=>{
+      const ip = ((d.interfaces||[]).find(i=>i.ip)||{}).ip || ((d.routing&&d.routing.svis&&d.routing.svis[0])||{}).ip || '';
+      return { name:d.hostname, icon:this._deviceIcon(d.type), detail: ip ? (d.type+' · '+ip) : d.type };
+    });
+    const topoStatusText = s.solved?'reachable':'investigating';
+    const topoStatusStyle = 'font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;'+(s.solved?'color:#0e7a3d;background:rgba(18,161,80,.12)':'color:#B9770F;background:rgba(245,166,35,.14)');
     const bl = s.scenarioList;
     const meta = bl.length > 0 ? bl.map((sc,i)=>({n:i+1,title:sc.title,tag:sc.difficulty<=2?'Switching':sc.difficulty<=3?'Routing':'Firewall / VPN',difficulty:sc.difficulty<=1?'Starter':sc.difficulty<=3?'Core':'Finale',symptom:sc.title,time:'~'+(sc.difficulty*3+2)+' min',btn:i===0?'Start':'Open',play:true,id:sc.id})) : [{n:1,title:'Wrong access VLAN',tag:'Switching',difficulty:'Starter',symptom:"Host A can't reach its gateway",time:'~4 min',btn:'Start',play:true,id:'wrong-access-vlan'},{n:2,title:'Trunk allowed-list gap',tag:'Switching',difficulty:'Core',symptom:'VLAN 30 blocked on trunk',time:'~6 min',btn:'Open',play:true,id:'trunk-allowed-list'},{n:3,title:'Inter-VLAN routing down',tag:'Routing',difficulty:'Core',symptom:"VLAN 10 can't reach VLAN 20",time:'~6 min',btn:'Open',play:true,id:'inter-vlan-routing'},{n:4,title:'Missing default route',tag:'Routing',difficulty:'Core',symptom:'Upstream unreachable',time:'~7 min',btn:'Open',play:true,id:'missing-default-route'},{n:5,title:'Tunnel up, traffic blackholed',tag:'Firewall / VPN',difficulty:'Finale',symptom:'IPsec up but no traffic',time:'~10 min',btn:'Open',play:true,id:'firewall-tunnel'}];
     const diffColors = {Starter:['#12A150','rgba(18,161,80,.1)'],Core:['#1E44C7','rgba(46,92,255,.1)'],Finale:['#B9770F','rgba(245,166,35,.14)']};
     const scenarios = meta.map(m=>{const dc=diffColors[m.difficulty]||diffColors.Core;return{...m,open:()=>this.loadAndPlay(m.id),cardStyle:'background:#fff;border:1px solid #E3E7EE;border-radius:14px;padding:20px;cursor:pointer;box-shadow:0 1px 2px rgba(20,22,27,.03)',tagStyle:'font-size:11.5px;font-weight:600;color:#5B6472;letter-spacing:.3px;text-transform:uppercase',diffStyle:'font-size:11.5px;font-weight:600;color:'+dc[0]+';background:'+dc[1]+';padding:3px 10px;border-radius:7px',btnStyle:'font-size:13px;font-weight:600;color:'+(m.btn==='Start'?'#2E5CFF':'#5B6472')};});
-    const hints = [{cost:'-5',text:'Start with `show vlan brief` to see port/VLAN assignments.'},{cost:'-10',text:'Compare the host port VLAN with the gateway SVI VLAN.'},{cost:'-15',text:'Fix: conf t > interface <port> > switchport access vlan <correct>, then ping.'}];
+    const hints = [{cost:'-5',text:'Read the device state first: `show running-config`, `show ip route`, `show interfaces`.'},{cost:'-10',text:'Reproduce the symptom — `ping '+(wc?wc.destination:'<target>')+'` — and note exactly where it breaks.'},{cost:'-15',text:'Change only the one broken setting, then re-ping to confirm the win condition.'}];
     const shownHints = hints.slice(0, s.hintsUsed);
     const cu=s.commandsUsed, wrong=s.wrongConfig, hu=s.hintsUsed;
     let score = 1000 - wrong*60 - hu*40 - Math.max(0,cu-4)*15 - Math.min(120,Math.floor(el/6));
@@ -681,7 +703,12 @@ class Component extends DCLogic {
     else if(running){verdictTitle='Agent playing scenario\u2026';verdictSub='Driving the simulation through MCP tools.';verdictIcon='\u21bb';vBg='#EAF0FF';vColor='#1E44C7';}
     else if(s.authorStatus==='pass'){verdictTitle='PASS \u00b7 solvable, fair';verdictSub='Every fairness rule satisfied.';verdictIcon='\u2713';vBg='rgba(18,161,80,.1)';vColor='#0e7a3d';}
     else{verdictTitle=bm==='broken'?'FAIL \u00b7 unsolvable':'FAIL \u00b7 symptom mismatch';verdictSub=bm==='broken'?'Reference solution does not fix it.':'Ticket/fault disagree.';verdictIcon='\u2715';vBg='rgba(229,72,77,.1)';vColor='#b21f24';}
-    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),mcpDotStyle:'width:6px;height:6px;border-radius:50%;background:'+(s.mcpOnline?'#12A150':'#E5484D'),mcpStatusText:s.mcpOnline?'MCP engine online':'MCP engine offline',scenarios,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',portLabel:s.accessVlan===10?'VLAN 10 \u2713':'VLAN '+s.accessVlan+' \u2717',portBadgeStyle:"margin-top:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;"+(s.accessVlan===10?'color:#0e7a3d;background:rgba(18,161,80,.1)':'color:#b21f24;background:rgba(229,72,77,.1)'),hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
+    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),mcpDotStyle:'width:6px;height:6px;border-radius:50%;background:'+(s.mcpOnline?'#12A150':'#E5484D'),mcpStatusText:s.mcpOnline?'MCP engine online':'MCP engine offline',scenarioNum,scenarioTitle:scTitle,termHeader,ticketId,ticketPriority,ticketTitle,ticketSymptom,winText,tryHint,debriefResolved,topoDevices,topoStatusText,topoStatusStyle,scenarios,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',portLabel:s.accessVlan===10?'VLAN 10 \u2713':'VLAN '+s.accessVlan+' \u2717',portBadgeStyle:"margin-top:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;"+(s.accessVlan===10?'color:#0e7a3d;background:rgba(18,161,80,.1)':'color:#b21f24;background:rgba(229,72,77,.1)'),hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
+  }
+
+  _deviceIcon(type){
+    const m = {switch:'🔀', router:'🌐', firewall:'🧱', host:'🖥️', ec2:'☁️', 'vpc-router':'🔗'};
+    return m[type] || '📦';
   }
 
   _yamlColor(t){

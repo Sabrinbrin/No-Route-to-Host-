@@ -60,8 +60,12 @@ function handleApi(path: string, body: any): any {
       currentGameState = loadScenario(scenario);
       return {
         success: true,
+        id: scenario.id,
+        title: scenario.title,
+        difficulty: scenario.difficulty,
         ticket: scenario.ticket,
         topology: currentGameState.network,
+        winCondition: scenario.win_condition,
         layout: scenario.layout || {},
       };
     }
