@@ -103,6 +103,11 @@ function evaluateL2Ping(
     const directConnect = isDirectlyConnectedToRouter(state, srcDevice, srcIface);
     if (directConnect) {
       // Host is directly connected to a router/firewall — no VLAN needed
+      // Check AWS conditions if applicable
+      if (dstResult) {
+        const awsCheck = checkAWSConditions(state, srcDevice, dstResult.device, destIp);
+        if (!awsCheck.success) return awsCheck;
+      }
       // Just verify the destination is reachable on that segment
       if (dstResult || findDeviceByIp(state, destIp)) {
         return { success: true };
@@ -178,8 +183,8 @@ function evaluateL3Ping(
   destIp: string,
   dstResult: { device: Device; iface: NetworkInterface } | undefined
 ): PingResult {
-  // For host devices, check gateway is reachable first
-  if (srcDevice.type === 'host') {
+  // For host/EC2 devices, check gateway is reachable first
+  if (srcDevice.type === 'host' || srcDevice.type === 'ec2') {
     const gatewayIp = srcIface.gateway;
     if (!gatewayIp) {
       return { success: false, reason: 'No default gateway configured on source host.', failedCondition: 1 };
@@ -212,8 +217,8 @@ function evaluateRouting(
   destIp: string,
   dstResult: { device: Device; iface: NetworkInterface } | undefined
 ): PingResult {
-  // Check if routing is enabled
-  if (!routerDevice.routing.enabled && routerDevice.type !== 'router' && routerDevice.type !== 'firewall') {
+  // Check if routing is enabled (skip for routers, firewalls, vpc-routers, and ec2 which route via VPC)
+  if (!routerDevice.routing.enabled && routerDevice.type !== 'router' && routerDevice.type !== 'firewall' && routerDevice.type !== 'vpc-router' && routerDevice.type !== 'ec2') {
     return { success: false, reason: `Routing is not enabled on ${routerDevice.hostname}.`, failedCondition: 4 };
   }
 
@@ -243,6 +248,16 @@ function evaluateRouting(
         if (dstResult || findDeviceByIp(state, destIp)) {
           const fwCheck = checkFirewallPath(state, routerDevice, destIp);
           if (!fwCheck.success) return fwCheck;
+          // Check AWS conditions on source and destination
+          const actualDst = dstResult || findDeviceByIp(state, destIp);
+          if (actualDst) {
+            // Find the original source device for AWS checks
+            const srcEc2 = findOriginalSourceDevice(state, routerDevice);
+            if (srcEc2) {
+              const awsCheck = checkAWSConditions(state, srcEc2, actualDst.device, destIp);
+              if (!awsCheck.success) return awsCheck;
+            }
+          }
           return { success: true };
         }
         return { success: false, reason: `Destination ${destIp} not reachable on connected interface.`, failedCondition: 4 };
@@ -272,6 +287,12 @@ function evaluateRouting(
   // Check firewall path
   const fwCheck = checkFirewallPath(state, routerDevice, destIp);
   if (!fwCheck.success) return fwCheck;
+
+  // Check AWS conditions (security groups, NACLs, route tables)
+  if (dstResult) {
+    const awsCheck = checkAWSConditions(state, routerDevice, dstResult.device, destIp);
+    if (!awsCheck.success) return awsCheck;
+  }
 
   // Recurse: can the next-hop device reach the destination?
   if (nextHopResult.device.id !== routerDevice.id) {
@@ -488,17 +509,17 @@ function isFirewallInPath(state: NetworkState, fromDevice: Device, fw: Device, d
  */
 function findOriginalSourceIp(state: NetworkState, fromDevice: Device, fw: Device): string | undefined {
   // If fromDevice is a firewall itself, find hosts connected to its internal interfaces
-  if (fromDevice.type === 'firewall' || fromDevice.type === 'router') {
+  if (fromDevice.type === 'firewall' || fromDevice.type === 'router' || fromDevice.type === 'vpc-router') {
     // Look for hosts directly connected to this device
     for (const link of state.links) {
       let hostDevId: string | undefined;
       if (link.from.device === fromDevice.id) {
         const dev = findDevice(state, link.to.device);
-        if (dev?.type === 'host') hostDevId = dev.id;
+        if (dev?.type === 'host' || dev?.type === 'ec2') hostDevId = dev.id;
       }
       if (link.to.device === fromDevice.id) {
         const dev = findDevice(state, link.from.device);
-        if (dev?.type === 'host') hostDevId = dev.id;
+        if (dev?.type === 'host' || dev?.type === 'ec2') hostDevId = dev.id;
       }
       if (hostDevId) {
         const host = findDevice(state, hostDevId);
@@ -511,6 +532,25 @@ function findOriginalSourceIp(state: NetworkState, fromDevice: Device, fw: Devic
   }
   // Fallback: use the fromDevice's own IP
   return fromDevice.interfaces.find(i => i.ip)?.ip || fromDevice.routing.svis[0]?.ip;
+}
+
+/**
+ * Find the original source device (EC2/host) behind a router.
+ */
+function findOriginalSourceDevice(state: NetworkState, routerDevice: Device): Device | undefined {
+  for (const link of state.links) {
+    let devId: string | undefined;
+    if (link.from.device === routerDevice.id) {
+      const dev = findDevice(state, link.to.device);
+      if (dev && (dev.type === 'host' || dev.type === 'ec2')) devId = dev.id;
+    }
+    if (link.to.device === routerDevice.id) {
+      const dev = findDevice(state, link.from.device);
+      if (dev && (dev.type === 'host' || dev.type === 'ec2')) devId = dev.id;
+    }
+    if (devId) return findDevice(state, devId);
+  }
+  return undefined;
 }
 
 function findBestRoute(device: Device, destIp: string): { network: string; mask: string; nextHop: string } | undefined {
@@ -602,8 +642,13 @@ function isDirectlyConnectedToRouter(state: NetworkState, hostDevice: Device, ho
   const otherDevice = findDevice(state, otherEnd.device);
   if (!otherDevice) return false;
 
-  // If connected to a router or firewall, it's a direct L3 connection
-  if (otherDevice.type === 'router' || otherDevice.type === 'firewall') {
+  // If connected to a router, firewall, vpc-router, or ec2 with IP, it's a direct L3 connection
+  if (otherDevice.type === 'router' || otherDevice.type === 'firewall' || otherDevice.type === 'vpc-router') {
+    return true;
+  }
+
+  // EC2 instances are directly connected at L3
+  if (otherDevice.type === 'ec2') {
     return true;
   }
 
@@ -614,4 +659,132 @@ function isDirectlyConnectedToRouter(state: NetworkState, hostDevice: Device, ho
   }
 
   return false;
+}
+
+/**
+ * Condition 6: Check AWS Security Groups and NACLs.
+ * For EC2/AWS devices, verify that security groups allow the traffic
+ * and NACLs permit it in both directions.
+ */
+function checkAWSConditions(state: NetworkState, srcDevice: Device, dstDevice: Device, destIp: string): PingResult {
+  // Check destination device's security group (inbound)
+  if (dstDevice.aws?.securityGroups) {
+    const srcIp = srcDevice.interfaces.find(i => i.ip)?.ip;
+    if (!srcIp) return { success: true }; // can't check without source IP
+
+    const allowed = dstDevice.aws.securityGroups.some(sg =>
+      sg.inboundRules.some(rule => {
+        if (rule.protocol !== 'icmp' && rule.protocol !== 'all') return false;
+        return cidrContains(rule.source, srcIp);
+      })
+    );
+
+    if (!allowed) {
+      const sgNames = dstDevice.aws.securityGroups.map(sg => sg.name || sg.id).join(', ');
+      return {
+        success: false,
+        reason: `Blocked by security group (${sgNames}) on ${dstDevice.hostname} \u2014 no inbound rule allows ICMP from ${srcIp}.`,
+        failedCondition: 6,
+      };
+    }
+  }
+
+  // Check source device's security group (outbound)
+  if (srcDevice.aws?.securityGroups) {
+    const allowed = srcDevice.aws.securityGroups.some(sg =>
+      sg.outboundRules.some(rule => {
+        if (rule.protocol !== 'icmp' && rule.protocol !== 'all') return false;
+        return cidrContains(rule.source, destIp);
+      })
+    );
+
+    if (!allowed) {
+      const sgNames = srcDevice.aws.securityGroups.map(sg => sg.name || sg.id).join(', ');
+      return {
+        success: false,
+        reason: `Blocked by security group (${sgNames}) on ${srcDevice.hostname} \u2014 no outbound rule allows ICMP to ${destIp}.`,
+        failedCondition: 6,
+      };
+    }
+  }
+
+  // Check NACLs (stateless - check both directions)
+  if (dstDevice.aws?.nacls) {
+    const srcIp = srcDevice.interfaces.find(i => i.ip)?.ip;
+    if (srcIp) {
+      const inboundResult = evaluateNACL(dstDevice.aws.nacls, 'inbound', srcIp);
+      if (!inboundResult) {
+        return {
+          success: false,
+          reason: `Blocked by NACL on ${dstDevice.hostname} subnet \u2014 inbound ICMP from ${srcIp} denied.`,
+          failedCondition: 6,
+        };
+      }
+    }
+  }
+
+  if (srcDevice.aws?.nacls) {
+    const outboundResult = evaluateNACL(srcDevice.aws.nacls, 'outbound', destIp);
+    if (!outboundResult) {
+      return {
+        success: false,
+        reason: `Blocked by NACL on ${srcDevice.hostname} subnet \u2014 outbound ICMP to ${destIp} denied.`,
+        failedCondition: 6,
+      };
+    }
+  }
+
+  // Check VPC route tables
+  if (srcDevice.aws?.routeTables) {
+    const hasRoute = srcDevice.aws.routeTables.some(rt =>
+      rt.routes.some(r => r.status === 'active' && cidrContains(r.destination, destIp))
+    );
+    if (!hasRoute) {
+      return {
+        success: false,
+        reason: `No route to ${destIp} in route table for ${srcDevice.hostname}.`,
+        failedCondition: 6,
+      };
+    }
+    // Check for blackhole routes
+    const blackhole = srcDevice.aws.routeTables.some(rt =>
+      rt.routes.some(r => r.status === 'blackhole' && cidrContains(r.destination, destIp))
+    );
+    if (blackhole) {
+      return {
+        success: false,
+        reason: `Route to ${destIp} is blackholed in route table for ${srcDevice.hostname}.`,
+        failedCondition: 6,
+      };
+    }
+  }
+
+  return { success: true };
+}
+
+function evaluateNACL(nacls: import('./types.js').NACL[], direction: 'inbound' | 'outbound', ip: string): boolean {
+  for (const nacl of nacls) {
+    const rules = direction === 'inbound' ? nacl.inboundRules : nacl.outboundRules;
+    // NACL rules are evaluated in order by rule number
+    const sorted = [...rules].sort((a, b) => a.ruleNumber - b.ruleNumber);
+    for (const rule of sorted) {
+      if (rule.protocol !== 'icmp' && rule.protocol !== 'all') continue;
+      if (cidrContains(rule.cidr, ip)) {
+        return rule.action === 'allow';
+      }
+    }
+  }
+  // Default deny
+  return false;
+}
+
+function cidrContains(cidr: string, ip: string): boolean {
+  if (cidr === '0.0.0.0/0') return true;
+  const [net, prefixStr] = cidr.split('/');
+  if (!prefixStr) return net === ip;
+  const prefix = parseInt(prefixStr);
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  const netNum = ipToNum(net);
+  const ipNum = ipToNum(ip);
+  return ((netNum & mask) >>> 0) === ((ipNum & mask) >>> 0);
 }

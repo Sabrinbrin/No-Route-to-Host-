@@ -8,11 +8,12 @@ export interface NetworkState {
 export interface Device {
   id: string;
   hostname: string;
-  type: 'switch' | 'router' | 'firewall' | 'host';
+  type: 'switch' | 'router' | 'firewall' | 'host' | 'ec2' | 'vpc-router';
   interfaces: NetworkInterface[];
   routing: RoutingConfig;
   firewallPolicies?: FirewallPolicy[];
   natRules?: NatRule[];
+  aws?: AWSConfig;
 }
 
 export interface NetworkInterface {
@@ -69,6 +70,68 @@ export interface NatRule {
   type: 'source' | 'destination';
   original: string;
   translated: string;
+}
+
+// ===== AWS Cloud Networking =====
+
+export interface SecurityGroup {
+  id: string;
+  name: string;
+  inboundRules: SGRule[];
+  outboundRules: SGRule[];
+}
+
+export interface SGRule {
+  protocol: 'tcp' | 'udp' | 'icmp' | 'all';
+  portRange?: string;      // e.g., "80", "443", "22", "0-65535", "all"
+  source: string;          // CIDR or sg-id
+  description?: string;
+}
+
+export interface NACL {
+  id: string;
+  name: string;
+  inboundRules: NACLRule[];
+  outboundRules: NACLRule[];
+}
+
+export interface NACLRule {
+  ruleNumber: number;
+  protocol: 'tcp' | 'udp' | 'icmp' | 'all';
+  portRange?: string;
+  cidr: string;
+  action: 'allow' | 'deny';
+}
+
+export interface RouteTable {
+  id: string;
+  name: string;
+  routes: VPCRoute[];
+  subnetAssociations: string[];  // subnet IDs
+}
+
+export interface VPCRoute {
+  destination: string;          // CIDR
+  target: string;               // igw-xxx, pcx-xxx, local, nat-xxx, eni-xxx
+  status: 'active' | 'blackhole';
+}
+
+export interface VPCPeering {
+  id: string;
+  name: string;
+  localVpc: string;
+  peerVpc: string;
+  status: 'active' | 'pending' | 'failed';
+}
+
+export interface AWSConfig {
+  securityGroups?: SecurityGroup[];
+  nacls?: NACL[];
+  routeTables?: RouteTable[];
+  vpcPeerings?: VPCPeering[];
+  vpc?: string;
+  subnet?: string;
+  availabilityZone?: string;
 }
 
 // ===== Ping / Reachability =====

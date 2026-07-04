@@ -81,6 +81,9 @@ function execModeCommand(
     // Already in exec/enable mode, just acknowledge
     return { output: `${device.hostname}#`, stateChanged: false };
   }
+  if (keyword === 'aws') {
+    return handleAWSCommand(state, device, parts.slice(1));
+  }
   if (keyword === 'connect') {
     return { output: '% Use the device selector to change devices.', stateChanged: false };
   }
@@ -601,4 +604,197 @@ function maskToCidr(mask: string): number {
     }
   }
   return bits;
+}
+
+
+// ===== AWS CLI COMMANDS =====
+
+function handleAWSCommand(state: NetworkState, device: Device, args: string[]): CommandResult {
+  const service = args[0]?.toLowerCase();
+  const action = args[1]?.toLowerCase();
+
+  if (service !== 'ec2') {
+    return { output: '% Supported: aws ec2 <command>', stateChanged: false };
+  }
+
+  if (!device.aws) {
+    return { output: '% This device has no AWS configuration.', stateChanged: false };
+  }
+
+  switch (action) {
+    case 'describe-security-groups':
+      return { output: formatSecurityGroups(device), stateChanged: false };
+
+    case 'describe-route-tables':
+      return { output: formatRouteTables(device), stateChanged: false };
+
+    case 'describe-network-acls':
+      return { output: formatNACLs(device), stateChanged: false };
+
+    case 'describe-vpc-peering-connections':
+      return { output: formatVPCPeering(device), stateChanged: false };
+
+    case 'authorize-security-group-ingress': {
+      // aws ec2 authorize-security-group-ingress --group-id <id> --protocol <p> --cidr <cidr>
+      const sgId = extractArg(args, '--group-id');
+      const protocol = extractArg(args, '--protocol') || 'all';
+      const cidr = extractArg(args, '--cidr') || '0.0.0.0/0';
+      const port = extractArg(args, '--port');
+      if (!sgId) return { output: '% Usage: aws ec2 authorize-security-group-ingress --group-id <id> --protocol <proto> --cidr <cidr>', stateChanged: false };
+
+      const sg = device.aws.securityGroups?.find(s => s.id === sgId || s.name === sgId);
+      if (!sg) return { output: `% Security group '${sgId}' not found.`, stateChanged: false };
+
+      sg.inboundRules.push({
+        protocol: protocol as any,
+        source: cidr,
+        portRange: port || 'all',
+      });
+      return { output: `% Inbound rule added to ${sg.id}: ${protocol} from ${cidr}`, stateChanged: true };
+    }
+
+    case 'authorize-security-group-egress': {
+      const sgId = extractArg(args, '--group-id');
+      const protocol = extractArg(args, '--protocol') || 'all';
+      const cidr = extractArg(args, '--cidr') || '0.0.0.0/0';
+      const port = extractArg(args, '--port');
+      if (!sgId) return { output: '% Usage: aws ec2 authorize-security-group-egress --group-id <id> --protocol <proto> --cidr <cidr>', stateChanged: false };
+
+      const sg = device.aws.securityGroups?.find(s => s.id === sgId || s.name === sgId);
+      if (!sg) return { output: `% Security group '${sgId}' not found.`, stateChanged: false };
+
+      sg.outboundRules.push({
+        protocol: protocol as any,
+        source: cidr,
+        portRange: port || 'all',
+      });
+      return { output: `% Outbound rule added to ${sg.id}: ${protocol} to ${cidr}`, stateChanged: true };
+    }
+
+    case 'create-route': {
+      // aws ec2 create-route --route-table-id <id> --destination-cidr <cidr> --target <tgt>
+      const rtId = extractArg(args, '--route-table-id');
+      const dest = extractArg(args, '--destination-cidr');
+      const target = extractArg(args, '--target') || extractArg(args, '--vpc-peering-connection-id') || extractArg(args, '--gateway-id');
+      if (!rtId || !dest || !target) return { output: '% Usage: aws ec2 create-route --route-table-id <id> --destination-cidr <cidr> --target <target>', stateChanged: false };
+
+      const rt = device.aws.routeTables?.find(r => r.id === rtId || r.name === rtId);
+      if (!rt) return { output: `% Route table '${rtId}' not found.`, stateChanged: false };
+
+      rt.routes.push({ destination: dest, target: target, status: 'active' });
+      return { output: `% Route added: ${dest} -> ${target} in ${rt.id}`, stateChanged: true };
+    }
+
+    case 'replace-route': {
+      const rtId = extractArg(args, '--route-table-id');
+      const dest = extractArg(args, '--destination-cidr');
+      const target = extractArg(args, '--target') || extractArg(args, '--gateway-id') || extractArg(args, '--nat-gateway-id');
+      if (!rtId || !dest || !target) return { output: '% Usage: aws ec2 replace-route --route-table-id <id> --destination-cidr <cidr> --target <target>', stateChanged: false };
+
+      const rt = device.aws.routeTables?.find(r => r.id === rtId || r.name === rtId);
+      if (!rt) return { output: `% Route table '${rtId}' not found.`, stateChanged: false };
+
+      const existing = rt.routes.find(r => r.destination === dest);
+      if (existing) {
+        existing.target = target;
+        existing.status = 'active';
+      } else {
+        rt.routes.push({ destination: dest, target: target, status: 'active' });
+      }
+      return { output: `% Route replaced: ${dest} -> ${target}`, stateChanged: true };
+    }
+
+    case 'create-network-acl-entry': {
+      const naclId = extractArg(args, '--network-acl-id');
+      const ruleNum = extractArg(args, '--rule-number');
+      const protocol = extractArg(args, '--protocol') || 'all';
+      const cidr = extractArg(args, '--cidr-block') || '0.0.0.0/0';
+      const ruleAction = extractArg(args, '--rule-action') || 'allow';
+      const ingress = args.includes('--ingress');
+      if (!naclId || !ruleNum) return { output: '% Usage: aws ec2 create-network-acl-entry --network-acl-id <id> --rule-number <n> --protocol <p> --cidr-block <cidr> --rule-action allow|deny --ingress|--egress', stateChanged: false };
+
+      const nacl = device.aws.nacls?.find(n => n.id === naclId || n.name === naclId);
+      if (!nacl) return { output: `% NACL '${naclId}' not found.`, stateChanged: false };
+
+      const rule = { ruleNumber: parseInt(ruleNum), protocol: protocol as any, cidr, action: ruleAction as 'allow' | 'deny' };
+      if (ingress) nacl.inboundRules.push(rule);
+      else nacl.outboundRules.push(rule);
+      return { output: `% NACL entry added: rule ${ruleNum} ${ruleAction} ${protocol} ${cidr}`, stateChanged: true };
+    }
+
+    default:
+      return {
+        output: `% Available aws ec2 commands:\n  describe-security-groups\n  describe-route-tables\n  describe-network-acls\n  describe-vpc-peering-connections\n  authorize-security-group-ingress --group-id <id> --protocol <p> --cidr <cidr>\n  authorize-security-group-egress --group-id <id> --protocol <p> --cidr <cidr>\n  create-route --route-table-id <id> --destination-cidr <cidr> --target <tgt>\n  create-network-acl-entry --network-acl-id <id> --rule-number <n> --protocol <p> --cidr-block <cidr> --rule-action allow|deny --ingress|--egress`,
+        stateChanged: false,
+      };
+  }
+}
+
+function extractArg(args: string[], flag: string): string | undefined {
+  const idx = args.findIndex(a => a.toLowerCase() === flag.toLowerCase());
+  if (idx === -1 || idx + 1 >= args.length) return undefined;
+  return args[idx + 1];
+}
+
+function formatSecurityGroups(device: Device): string {
+  if (!device.aws?.securityGroups?.length) return '% No security groups.';
+  let out = '';
+  for (const sg of device.aws.securityGroups) {
+    out += `SecurityGroup: ${sg.id} (${sg.name})\n`;
+    out += `  Inbound Rules:\n`;
+    if (sg.inboundRules.length === 0) out += `    (none)\n`;
+    for (const r of sg.inboundRules) {
+      out += `    ${r.protocol.padEnd(6)} ${(r.portRange || 'all').padEnd(10)} ${r.source}${r.description ? '  # ' + r.description : ''}\n`;
+    }
+    out += `  Outbound Rules:\n`;
+    if (sg.outboundRules.length === 0) out += `    (none)\n`;
+    for (const r of sg.outboundRules) {
+      out += `    ${r.protocol.padEnd(6)} ${(r.portRange || 'all').padEnd(10)} ${r.source}\n`;
+    }
+    out += '\n';
+  }
+  return out;
+}
+
+function formatRouteTables(device: Device): string {
+  if (!device.aws?.routeTables?.length) return '% No route tables.';
+  let out = '';
+  for (const rt of device.aws.routeTables) {
+    out += `RouteTable: ${rt.id} (${rt.name})\n`;
+    out += `  Destination        Target           Status\n`;
+    out += `  ${'─'.repeat(50)}\n`;
+    for (const r of rt.routes) {
+      out += `  ${r.destination.padEnd(19)} ${r.target.padEnd(16)} ${r.status}\n`;
+    }
+    out += '\n';
+  }
+  return out;
+}
+
+function formatNACLs(device: Device): string {
+  if (!device.aws?.nacls?.length) return '% No NACLs.';
+  let out = '';
+  for (const nacl of device.aws.nacls) {
+    out += `NACL: ${nacl.id} (${nacl.name})\n`;
+    out += `  Inbound:\n    Rule#  Proto   CIDR              Action\n`;
+    for (const r of nacl.inboundRules.sort((a, b) => a.ruleNumber - b.ruleNumber)) {
+      out += `    ${String(r.ruleNumber).padEnd(6)} ${r.protocol.padEnd(7)} ${r.cidr.padEnd(17)} ${r.action}\n`;
+    }
+    out += `  Outbound:\n    Rule#  Proto   CIDR              Action\n`;
+    for (const r of nacl.outboundRules.sort((a, b) => a.ruleNumber - b.ruleNumber)) {
+      out += `    ${String(r.ruleNumber).padEnd(6)} ${r.protocol.padEnd(7)} ${r.cidr.padEnd(17)} ${r.action}\n`;
+    }
+    out += '\n';
+  }
+  return out;
+}
+
+function formatVPCPeering(device: Device): string {
+  if (!device.aws?.vpcPeerings?.length) return '% No VPC peering connections.';
+  let out = `PeeringID            Name            Local VPC    Peer VPC     Status\n`;
+  out += `${'─'.repeat(70)}\n`;
+  for (const p of device.aws.vpcPeerings) {
+    out += `${p.id.padEnd(20)} ${(p.name||'-').padEnd(15)} ${p.localVpc.padEnd(12)} ${p.peerVpc.padEnd(12)} ${p.status}\n`;
+  }
+  return out;
 }

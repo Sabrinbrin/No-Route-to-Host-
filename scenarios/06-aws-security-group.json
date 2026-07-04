@@ -1,0 +1,187 @@
+{
+  "id": "aws-security-group",
+  "title": "EC2 Security Group Blocking ICMP",
+  "difficulty": 3,
+  "topology": {
+    "devices": [
+      {
+        "id": "bastion",
+        "hostname": "Bastion",
+        "type": "ec2",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.1.10",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.1.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] },
+        "aws": {
+          "vpc": "vpc-0a1b2c3d",
+          "subnet": "subnet-pub-1a",
+          "securityGroups": [
+            {
+              "id": "sg-bastion",
+              "name": "bastion-sg",
+              "inboundRules": [
+                { "protocol": "tcp", "portRange": "22", "source": "0.0.0.0/0", "description": "SSH" },
+                { "protocol": "icmp", "portRange": "all", "source": "0.0.0.0/0", "description": "Ping" }
+              ],
+              "outboundRules": [
+                { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+              ]
+            }
+          ],
+          "routeTables": [
+            {
+              "id": "rtb-pub",
+              "name": "public-rt",
+              "routes": [
+                { "destination": "10.0.0.0/16", "target": "local", "status": "active" },
+                { "destination": "0.0.0.0/0", "target": "igw-main", "status": "active" }
+              ],
+              "subnetAssociations": ["subnet-pub-1a"]
+            }
+          ]
+        }
+      },
+      {
+        "id": "vpc-router",
+        "hostname": "VPC-Router",
+        "type": "vpc-router",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.1.1",
+            "mask": "255.255.255.0",
+            "status": "up"
+          },
+          {
+            "name": "eth1",
+            "ip": "10.0.2.1",
+            "mask": "255.255.255.0",
+            "status": "up"
+          }
+        ],
+        "routing": {
+          "enabled": true,
+          "routes": [
+            { "network": "10.0.1.0", "mask": "255.255.255.0", "nextHop": "10.0.1.1" },
+            { "network": "10.0.2.0", "mask": "255.255.255.0", "nextHop": "10.0.2.1" }
+          ],
+          "svis": []
+        }
+      },
+      {
+        "id": "app-server",
+        "hostname": "AppServer",
+        "type": "ec2",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.2.20",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.2.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] },
+        "aws": {
+          "vpc": "vpc-0a1b2c3d",
+          "subnet": "subnet-priv-1a",
+          "securityGroups": [
+            {
+              "id": "sg-app",
+              "name": "app-sg",
+              "inboundRules": [
+                { "protocol": "tcp", "portRange": "443", "source": "10.0.1.0/24", "description": "HTTPS from public subnet" }
+              ],
+              "outboundRules": [
+                { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+              ]
+            }
+          ],
+          "routeTables": [
+            {
+              "id": "rtb-priv",
+              "name": "private-rt",
+              "routes": [
+                { "destination": "10.0.0.0/16", "target": "local", "status": "active" }
+              ],
+              "subnetAssociations": ["subnet-priv-1a"]
+            }
+          ]
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "link1",
+        "from": { "device": "bastion", "interface": "eth0" },
+        "to": { "device": "vpc-router", "interface": "eth0" }
+      },
+      {
+        "id": "link2",
+        "from": { "device": "vpc-router", "interface": "eth1" },
+        "to": { "device": "app-server", "interface": "eth0" }
+      }
+    ]
+  },
+  "injected_fault": {
+    "device": "app-server",
+    "field": "aws",
+    "value": {
+      "vpc": "vpc-0a1b2c3d",
+      "subnet": "subnet-priv-1a",
+      "securityGroups": [
+        {
+          "id": "sg-app",
+          "name": "app-sg",
+          "inboundRules": [
+            { "protocol": "tcp", "portRange": "443", "source": "10.0.1.0/24", "description": "HTTPS from public subnet" }
+          ],
+          "outboundRules": [
+            { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+          ]
+        }
+      ],
+      "routeTables": [
+        {
+          "id": "rtb-priv",
+          "name": "private-rt",
+          "routes": [
+            { "destination": "10.0.0.0/16", "target": "local", "status": "active" }
+          ],
+          "subnetAssociations": ["subnet-priv-1a"]
+        }
+      ]
+    },
+    "action": "set"
+  },
+  "ticket": {
+    "title": "Bastion can't ping the App Server",
+    "symptom": "The bastion host (10.0.1.10) in the public subnet cannot ping the application server (10.0.2.20) in the private subnet. SSH to the bastion works fine. Both instances are in the same VPC (vpc-0a1b2c3d).",
+    "affected_hosts": ["bastion"]
+  },
+  "win_condition": {
+    "type": "ping",
+    "source": "bastion",
+    "destination": "10.0.2.20",
+    "expected": "success"
+  },
+  "reference_solution": [
+    {
+      "device": "app-server",
+      "commands": [
+        "aws ec2 authorize-security-group-ingress --group-id sg-app --protocol icmp --cidr 10.0.1.0/24"
+      ]
+    }
+  ],
+  "layout": {
+    "bastion": { "x": 100, "y": 80 },
+    "vpc-router": { "x": 300, "y": 150 },
+    "app-server": { "x": 500, "y": 80 }
+  }
+}

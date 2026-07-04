@@ -45,9 +45,9 @@
       </nav>
       <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
         <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#5B6472;background:#F4F6FA;border:1px solid #E3E7EE;padding:5px 10px;border-radius:8px">
-          <span style="width:6px;height:6px;border-radius:50%;background:#12A150"></span>MCP engine online
+          <span style="{{ mcpDotStyle }}"></span>{{ mcpStatusText }}
         </div>
-        <div style="width:30px;height:30px;border-radius:50%;background:#2E5CFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600">JR</div>
+        <div style="width:30px;height:30px;border-radius:50%;background:#2E5CFF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600">SB</div>
       </div>
     </header>
   </sc-if>
@@ -127,6 +127,10 @@
           <div style="font-weight:600;font-size:15.5px;margin-top:14px">Kiro plays it first</div>
           <div style="font-size:13.5px;color:#5B6472;line-height:1.55;margin-top:6px">On save, an agent drives the sim through MCP and proves the lab is solvable and fair — before a student ever sees it.</div>
         </div>
+      </div>
+
+      <div style="text-align:center;padding:20px 0 40px;font-size:12.5px;color:#8B949E">
+        Built by <a href="https://github.com/Sabrinbrin" style="color:#2E5CFF;text-decoration:none;font-weight:500">@Sabrinbrin</a> with Kiro
       </div>
     </div>
   </sc-if>
@@ -494,6 +498,7 @@ class Component extends DCLogic {
     ticket: null,
     topology: null,
     accessVlan: 20,
+    mcpOnline: false,
   };
 
   componentDidMount(){
@@ -501,14 +506,26 @@ class Component extends DCLogic {
       if(this.state.screen==='play' && !this.state.solved) this.setState(s=>({tick:s.tick+1}));
     },1000);
     this.loadScenarios();
+    this.checkMCPStatus();
+    this._mcpCheck = setInterval(()=>this.checkMCPStatus(), 10000);
   }
-  componentWillUnmount(){ clearInterval(this._timer); clearTimeout(this._at); }
+  componentWillUnmount(){ clearInterval(this._timer); clearInterval(this._mcpCheck); clearTimeout(this._at); }
+
+  async checkMCPStatus() {
+    try {
+      const res = await fetch(this.API + '/api/scenarios', { method: 'GET' });
+      const data = await res.json();
+      this.setState({ mcpOnline: Array.isArray(data) && data.length > 0 });
+    } catch(e) {
+      this.setState({ mcpOnline: false });
+    }
+  }
 
   async loadScenarios() {
     try {
       const res = await fetch(this.API + '/api/scenarios');
       const data = await res.json();
-      if (Array.isArray(data)) this.setState({ scenarioList: data });
+      if (Array.isArray(data)) this.setState({ scenarioList: data, mcpOnline: true });
     } catch(e) {}
   }
 
@@ -664,7 +681,7 @@ class Component extends DCLogic {
     else if(running){verdictTitle='Agent playing scenario\u2026';verdictSub='Driving the simulation through MCP tools.';verdictIcon='\u21bb';vBg='#EAF0FF';vColor='#1E44C7';}
     else if(s.authorStatus==='pass'){verdictTitle='PASS \u00b7 solvable, fair';verdictSub='Every fairness rule satisfied.';verdictIcon='\u2713';vBg='rgba(18,161,80,.1)';vColor='#0e7a3d';}
     else{verdictTitle=bm==='broken'?'FAIL \u00b7 unsolvable':'FAIL \u00b7 symptom mismatch';verdictSub=bm==='broken'?'Reference solution does not fix it.':'Ticket/fault disagree.';verdictIcon='\u2715';vBg='rgba(229,72,77,.1)';vColor='#b21f24';}
-    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),scenarios,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',portLabel:s.accessVlan===10?'VLAN 10 \u2713':'VLAN '+s.accessVlan+' \u2717',portBadgeStyle:"margin-top:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;"+(s.accessVlan===10?'color:#0e7a3d;background:rgba(18,161,80,.1)':'color:#b21f24;background:rgba(229,72,77,.1)'),hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
+    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),mcpDotStyle:'width:6px;height:6px;border-radius:50%;background:'+(s.mcpOnline?'#12A150':'#E5484D'),mcpStatusText:s.mcpOnline?'MCP engine online':'MCP engine offline',scenarios,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',portLabel:s.accessVlan===10?'VLAN 10 \u2713':'VLAN '+s.accessVlan+' \u2717',portBadgeStyle:"margin-top:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;"+(s.accessVlan===10?'color:#0e7a3d;background:rgba(18,161,80,.1)':'color:#b21f24;background:rgba(229,72,77,.1)'),hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
   }
 
   _yamlColor(t){

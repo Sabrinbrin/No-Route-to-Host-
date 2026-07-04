@@ -171,11 +171,8 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // Static file serving
-  let filePath = url === '/' ? '/index.html' : url;
-
-  // Serve the DC game UI at /game
-  if (url === '/game' || url === '/game/') {
+  // Static file serving — DC UI is the root
+  if (url === '/' || url === '/index.html') {
     const dcPath = join(srcDir, 'No Route to Host.dc.html');
     try {
       const content = readFileSync(dcPath, 'utf-8');
@@ -183,7 +180,7 @@ const server = createServer((req, res) => {
       res.end(content);
     } catch {
       res.writeHead(404);
-      res.end('DC HTML not found');
+      res.end('Not found');
     }
     return;
   }
@@ -202,6 +199,7 @@ const server = createServer((req, res) => {
     return;
   }
 
+  let filePath = url;
   const fullPath = join(publicDir, filePath);
 
   try {

@@ -1,0 +1,223 @@
+{
+  "id": "aws-nacl-deny",
+  "title": "NACL Blocking Return Traffic",
+  "difficulty": 4,
+  "topology": {
+    "devices": [
+      {
+        "id": "jump-box",
+        "hostname": "JumpBox",
+        "type": "ec2",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.0.50",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.0.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] },
+        "aws": {
+          "vpc": "vpc-main",
+          "subnet": "subnet-mgmt",
+          "securityGroups": [
+            {
+              "id": "sg-jump",
+              "name": "jumpbox-sg",
+              "inboundRules": [
+                { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+              ],
+              "outboundRules": [
+                { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+              ]
+            }
+          ],
+          "nacls": [
+            {
+              "id": "acl-mgmt",
+              "name": "mgmt-nacl",
+              "inboundRules": [
+                { "ruleNumber": 100, "protocol": "all", "cidr": "0.0.0.0/0", "action": "allow" }
+              ],
+              "outboundRules": [
+                { "ruleNumber": 100, "protocol": "all", "cidr": "0.0.0.0/0", "action": "allow" }
+              ]
+            }
+          ],
+          "routeTables": [
+            {
+              "id": "rtb-mgmt",
+              "name": "mgmt-rt",
+              "routes": [
+                { "destination": "10.0.0.0/16", "target": "local", "status": "active" }
+              ],
+              "subnetAssociations": ["subnet-mgmt"]
+            }
+          ]
+        }
+      },
+      {
+        "id": "vpc-gw",
+        "hostname": "VPC-GW",
+        "type": "vpc-router",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.0.1",
+            "mask": "255.255.255.0",
+            "status": "up"
+          },
+          {
+            "name": "eth1",
+            "ip": "10.0.10.1",
+            "mask": "255.255.255.0",
+            "status": "up"
+          }
+        ],
+        "routing": {
+          "enabled": true,
+          "routes": [
+            { "network": "10.0.0.0", "mask": "255.255.0.0", "nextHop": "10.0.0.1" }
+          ],
+          "svis": []
+        }
+      },
+      {
+        "id": "api-server",
+        "hostname": "API-Server",
+        "type": "ec2",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.10.100",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.10.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] },
+        "aws": {
+          "vpc": "vpc-main",
+          "subnet": "subnet-api",
+          "securityGroups": [
+            {
+              "id": "sg-api",
+              "name": "api-sg",
+              "inboundRules": [
+                { "protocol": "icmp", "portRange": "all", "source": "10.0.0.0/16" },
+                { "protocol": "tcp", "portRange": "443", "source": "10.0.0.0/16" }
+              ],
+              "outboundRules": [
+                { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+              ]
+            }
+          ],
+          "nacls": [
+            {
+              "id": "acl-api",
+              "name": "api-nacl",
+              "inboundRules": [
+                { "ruleNumber": 100, "protocol": "tcp", "cidr": "10.0.0.0/16", "action": "allow" },
+                { "ruleNumber": 200, "protocol": "icmp", "cidr": "10.0.0.0/16", "action": "allow" }
+              ],
+              "outboundRules": [
+                { "ruleNumber": 100, "protocol": "tcp", "cidr": "10.0.0.0/16", "action": "allow" }
+              ]
+            }
+          ],
+          "routeTables": [
+            {
+              "id": "rtb-api",
+              "name": "api-rt",
+              "routes": [
+                { "destination": "10.0.0.0/16", "target": "local", "status": "active" }
+              ],
+              "subnetAssociations": ["subnet-api"]
+            }
+          ]
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "link1",
+        "from": { "device": "jump-box", "interface": "eth0" },
+        "to": { "device": "vpc-gw", "interface": "eth0" }
+      },
+      {
+        "id": "link2",
+        "from": { "device": "vpc-gw", "interface": "eth1" },
+        "to": { "device": "api-server", "interface": "eth0" }
+      }
+    ]
+  },
+  "injected_fault": {
+    "device": "api-server",
+    "field": "aws",
+    "value": {
+      "vpc": "vpc-main",
+      "subnet": "subnet-api",
+      "securityGroups": [
+        {
+          "id": "sg-api",
+          "name": "api-sg",
+          "inboundRules": [
+            { "protocol": "icmp", "portRange": "all", "source": "10.0.0.0/16" },
+            { "protocol": "tcp", "portRange": "443", "source": "10.0.0.0/16" }
+          ],
+          "outboundRules": [
+            { "protocol": "all", "portRange": "all", "source": "0.0.0.0/0" }
+          ]
+        }
+      ],
+      "nacls": [
+        {
+          "id": "acl-api",
+          "name": "api-nacl",
+          "inboundRules": [
+            { "ruleNumber": 100, "protocol": "tcp", "cidr": "10.0.0.0/16", "action": "allow" }
+          ],
+          "outboundRules": [
+            { "ruleNumber": 100, "protocol": "tcp", "cidr": "10.0.0.0/16", "action": "allow" }
+          ]
+        }
+      ],
+      "routeTables": [
+        {
+          "id": "rtb-api",
+          "name": "api-rt",
+          "routes": [
+            { "destination": "10.0.0.0/16", "target": "local", "status": "active" }
+          ],
+          "subnetAssociations": ["subnet-api"]
+        }
+      ]
+    },
+    "action": "set"
+  },
+  "ticket": {
+    "title": "JumpBox can't ping the API server",
+    "symptom": "JumpBox (10.0.0.50) in the management subnet cannot ping API-Server (10.0.10.100) in the API subnet. Both are in the same VPC (vpc-main). The security group on the API server allows ICMP from 10.0.0.0/16. TCP traffic on port 443 works fine between them.",
+    "affected_hosts": ["jump-box"]
+  },
+  "win_condition": {
+    "type": "ping",
+    "source": "jump-box",
+    "destination": "10.0.10.100",
+    "expected": "success"
+  },
+  "reference_solution": [
+    {
+      "device": "api-server",
+      "commands": [
+        "aws ec2 create-network-acl-entry --network-acl-id acl-api --rule-number 200 --protocol icmp --cidr-block 10.0.0.0/16 --rule-action allow --ingress"
+      ]
+    }
+  ],
+  "layout": {
+    "jump-box": { "x": 80, "y": 80 },
+    "vpc-gw": { "x": 300, "y": 150 },
+    "api-server": { "x": 520, "y": 80 }
+  }
+}
