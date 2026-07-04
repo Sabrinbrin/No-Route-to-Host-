@@ -105,3 +105,6 @@ h1 { font-size: 30px; letter-spacing: -0.6px; margin: 6px 0 4px; }
 
 
 @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+
+
+.card.solved { border-color: var(--green); background: rgba(18,161,80,.03); }

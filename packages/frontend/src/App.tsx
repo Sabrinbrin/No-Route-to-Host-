@@ -22,6 +22,23 @@ export function App() {
   const [tick, setTick] = useState(0);
   const started = useRef(0);
 
+  // Persist solved scenarios in localStorage
+  const [solvedIds, setSolvedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('nrth-solved');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  function markSolved(id: string) {
+    setSolvedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      try { localStorage.setItem('nrth-solved', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
+
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(t);
@@ -48,6 +65,7 @@ export function App() {
   function onWin() {
     setFinalTime(Math.floor((Date.now() - started.current) / 1000));
     setSolved(true);
+    if (session) markSolved(session.scenario.id);
   }
 
   const hostname = session?.network.devices.find((d) => d.id === device)?.hostname ?? 'SW1';
@@ -71,7 +89,7 @@ export function App() {
 
       <div className="content">
         {screen === 'landing' && <Landing onPlay={() => play(scenarios[0]?.id)} onBrowse={() => setScreen('dashboard')} onAuthor={() => setScreen('author')} scenarioCount={scenarios.length} />}
-        {screen === 'dashboard' && <Dashboard scenarios={scenarios} onPlay={play} />}
+        {screen === 'dashboard' && <Dashboard scenarios={scenarios} solvedIds={solvedIds} onPlay={play} />}
         {screen === 'author' && <AuthorStudio />}
         {screen === 'play' && session && (
           <Play
@@ -188,28 +206,29 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
   );
 }
 
-function Dashboard({ scenarios, onPlay }: { scenarios: ReturnType<typeof listScenarios>; onPlay: (id: string) => void }) {
+function Dashboard({ scenarios, solvedIds, onPlay }: { scenarios: ReturnType<typeof listScenarios>; solvedIds: Set<string>; onPlay: (id: string) => void }) {
+  const solvedCount = scenarios.filter(s => solvedIds.has(s.id)).length;
   return (
     <div className="wrap">
       <div className="eyebrow">Training queue</div>
       <h1>Pick a broken network</h1>
-      <p className="sub">Every scenario was validated solvable &amp; fair before release. Diagnose, fix, debrief.</p>
+      <p className="sub">Every scenario was validated solvable &amp; fair before release. Diagnose, fix, debrief. <b>{solvedCount}/{scenarios.length}</b> solved.</p>
       <div className="grid">
         {scenarios.map((s, i) => (
-          <div className="card click" key={s.id} onClick={() => onPlay(s.id)}
+          <div className={`card click ${solvedIds.has(s.id) ? 'solved' : ''}`} key={s.id} onClick={() => onPlay(s.id)}
             role="button" tabIndex={0}
             onKeyDown={(e) => (e.key === 'Enter' ? onPlay(s.id) : undefined)}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <span className="ticket-num" style={{ width: 30, height: 30, borderRadius: 8, background: '#14161b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontWeight: 600 }}>{i + 1}</span>
+                <span className="ticket-num" style={{ width: 30, height: 30, borderRadius: 8, background: solvedIds.has(s.id) ? 'var(--green)' : '#14161b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontWeight: 600 }}>{solvedIds.has(s.id) ? '✓' : i + 1}</span>
                 <span className="tag">{TAG(s.difficulty)}</span>
               </div>
               <span className={`chip ${CHIP(s.difficulty)}`}>{DIFF(s.difficulty)}</span>
             </div>
             <div className="title">{s.title}</div>
             <div className="foot">
-              <span><span className="dot" style={{ display: 'inline-block', marginRight: 6 }} />agent-verified</span>
-              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{i === 0 ? 'Start' : 'Open'} →</span>
+              <span><span className="dot" style={{ display: 'inline-block', marginRight: 6 }} />{solvedIds.has(s.id) ? 'completed ✓' : 'agent-verified'}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{solvedIds.has(s.id) ? 'Replay' : i === 0 ? 'Start' : 'Open'} →</span>
             </div>
           </div>
         ))}
