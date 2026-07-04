@@ -7,7 +7,7 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: process.env.VITE_BASE || './',
   server: { fs: { allow: [repoRoot] } },
   build: { outDir: 'dist', emptyOutDir: true },
 });
