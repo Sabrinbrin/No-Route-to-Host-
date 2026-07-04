@@ -92,6 +92,8 @@ h1 { font-size: 30px; letter-spacing: -0.6px; margin: 6px 0 4px; }
 /* Author studio */
 .studio { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
 .yaml { background: var(--term-bg); color: #c9d1d9; border-radius: 12px; padding: 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; white-space: pre; overflow: auto; max-height: 62vh; }
+.yaml-editor { background: var(--term-bg); color: #c9d1d9; border-radius: 12px; padding: 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; white-space: pre; overflow: auto; max-height: 62vh; min-height: 50vh; width: 100%; border: 1px solid var(--border); resize: vertical; outline: none; tab-size: 2; }
+.yaml-editor:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,92,255,.12); }
 .verdict { border-radius: 12px; padding: 16px; margin-top: 14px; font-size: 14px; }
 .verdict.pass { background: rgba(18,161,80,.1); color: #0e7a3d; }
 .verdict.fail { background: rgba(229,72,77,.1); color: #b21f24; }
