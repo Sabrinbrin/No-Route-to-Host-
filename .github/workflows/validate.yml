@@ -1,0 +1,45 @@
+name: Validate Scenarios
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scenarios/**'
+      - 'src/engine/**'
+      - 'src/validator/**'
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install TypeScript
+        run: npm install -g typescript
+
+      - name: Build
+        run: tsc -p tsconfig.json
+
+      - name: Validate all scenarios
+        run: node dist/validator/index.js
+
+      - name: Run MCP server smoke test
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+          {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_scenarios","arguments":{}}}' \
+          | node dist/mcp-server/index.js 2>/dev/null \
+          | python3 -c "
+          import sys, json
+          for line in sys.stdin:
+              d = json.loads(line)
+              if d.get('id') == 2:
+                  text = json.loads(d['result']['content'][0]['text'])
+                  assert len(text) >= 8, f'Expected 8+ scenarios, got {len(text)}'
+                  print(f'✓ MCP server returned {len(text)} scenarios')
+          "

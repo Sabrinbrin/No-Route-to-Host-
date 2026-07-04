@@ -1,0 +1,146 @@
+{
+  "id": "linux-iptables",
+  "title": "Linux iptables Blocking Inbound",
+  "difficulty": 3,
+  "topology": {
+    "devices": [
+      {
+        "id": "workstation",
+        "hostname": "DevPC",
+        "type": "linux-server",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "192.168.1.50",
+            "mask": "255.255.255.0",
+            "gateway": "192.168.1.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] },
+        "os": {
+          "type": "linux",
+          "iptables": {
+            "chains": [
+              { "name": "INPUT", "policy": "ACCEPT", "rules": [] },
+              { "name": "OUTPUT", "policy": "ACCEPT", "rules": [] },
+              { "name": "FORWARD", "policy": "ACCEPT", "rules": [] }
+            ]
+          }
+        }
+      },
+      {
+        "id": "lan-switch",
+        "hostname": "LAN-SW",
+        "type": "router",
+        "interfaces": [
+          { "name": "eth0", "ip": "192.168.1.1", "mask": "255.255.255.0", "status": "up" },
+          { "name": "eth1", "ip": "192.168.2.1", "mask": "255.255.255.0", "status": "up" }
+        ],
+        "routing": {
+          "enabled": true,
+          "routes": [
+            { "network": "192.168.1.0", "mask": "255.255.255.0", "nextHop": "192.168.1.1" },
+            { "network": "192.168.2.0", "mask": "255.255.255.0", "nextHop": "192.168.2.1" }
+          ],
+          "svis": []
+        }
+      },
+      {
+        "id": "web-server",
+        "hostname": "WebSrv",
+        "type": "linux-server",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "192.168.2.10",
+            "mask": "255.255.255.0",
+            "gateway": "192.168.2.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] },
+        "os": {
+          "type": "linux",
+          "iptables": {
+            "chains": [
+              {
+                "name": "INPUT",
+                "policy": "DROP",
+                "rules": [
+                  { "num": 1, "protocol": "all", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "action": "ACCEPT", "state": "ESTABLISHED,RELATED" },
+                  { "num": 2, "protocol": "tcp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "dport": "22", "action": "ACCEPT" },
+                  { "num": 3, "protocol": "tcp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "dport": "80", "action": "ACCEPT" },
+                  { "num": 4, "protocol": "tcp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "dport": "443", "action": "ACCEPT" },
+                  { "num": 5, "protocol": "icmp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "action": "ACCEPT" }
+                ]
+              },
+              { "name": "OUTPUT", "policy": "ACCEPT", "rules": [] },
+              { "name": "FORWARD", "policy": "DROP", "rules": [] }
+            ]
+          },
+          "services": [
+            { "name": "nginx", "status": "running", "enabled": true, "port": 80, "protocol": "tcp" },
+            { "name": "sshd", "status": "running", "enabled": true, "port": 22, "protocol": "tcp" }
+          ]
+        }
+      }
+    ],
+    "links": [
+      { "id": "link1", "from": { "device": "workstation", "interface": "eth0" }, "to": { "device": "lan-switch", "interface": "eth0" } },
+      { "id": "link2", "from": { "device": "lan-switch", "interface": "eth1" }, "to": { "device": "web-server", "interface": "eth0" } }
+    ]
+  },
+  "injected_fault": {
+    "device": "web-server",
+    "field": "os",
+    "value": {
+      "type": "linux",
+      "iptables": {
+        "chains": [
+          {
+            "name": "INPUT",
+            "policy": "DROP",
+            "rules": [
+              { "num": 1, "protocol": "all", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "action": "ACCEPT", "state": "ESTABLISHED,RELATED" },
+              { "num": 2, "protocol": "tcp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "dport": "22", "action": "ACCEPT" },
+              { "num": 3, "protocol": "tcp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "dport": "80", "action": "ACCEPT" },
+              { "num": 4, "protocol": "tcp", "source": "0.0.0.0/0", "destination": "0.0.0.0/0", "dport": "443", "action": "ACCEPT" }
+            ]
+          },
+          { "name": "OUTPUT", "policy": "ACCEPT", "rules": [] },
+          { "name": "FORWARD", "policy": "DROP", "rules": [] }
+        ]
+      },
+      "services": [
+        { "name": "nginx", "status": "running", "enabled": true, "port": 80, "protocol": "tcp" },
+        { "name": "sshd", "status": "running", "enabled": true, "port": 22, "protocol": "tcp" }
+      ]
+    },
+    "action": "set"
+  },
+  "ticket": {
+    "title": "Can't ping the web server from DevPC",
+    "symptom": "DevPC (192.168.1.50) cannot ping WebSrv (192.168.2.10). SSH and HTTP work fine. The server was recently hardened and iptables rules were tightened. Other servers on the same subnet respond to ping normally.",
+    "affected_hosts": ["workstation"]
+  },
+  "win_condition": {
+    "type": "ping",
+    "source": "workstation",
+    "destination": "192.168.2.10",
+    "expected": "success"
+  },
+  "reference_solution": [
+    {
+      "device": "web-server",
+      "commands": [
+        "iptables -A INPUT -p icmp -s 0.0.0.0/0 -d 0.0.0.0/0 -j ACCEPT"
+      ]
+    }
+  ],
+  "layout": {
+    "workstation": { "x": 80, "y": 80 },
+    "lan-switch": { "x": 300, "y": 150 },
+    "web-server": { "x": 520, "y": 80 }
+  }
+}

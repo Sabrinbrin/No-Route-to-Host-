@@ -107,6 +107,9 @@ function evaluateL2Ping(
       if (dstResult) {
         const awsCheck = checkAWSConditions(state, srcDevice, dstResult.device, destIp);
         if (!awsCheck.success) return awsCheck;
+        // Check OS-level conditions (iptables, Windows Firewall, services)
+        const osCheck = checkOSConditions(state, srcDevice, dstResult.device, destIp);
+        if (!osCheck.success) return osCheck;
       }
       // Just verify the destination is reachable on that segment
       if (dstResult || findDeviceByIp(state, destIp)) {
@@ -183,8 +186,8 @@ function evaluateL3Ping(
   destIp: string,
   dstResult: { device: Device; iface: NetworkInterface } | undefined
 ): PingResult {
-  // For host/EC2 devices, check gateway is reachable first
-  if (srcDevice.type === 'host' || srcDevice.type === 'ec2') {
+  // For host/EC2/server devices, check gateway is reachable first
+  if (srcDevice.type === 'host' || srcDevice.type === 'ec2' || srcDevice.type === 'linux-server' || srcDevice.type === 'windows-server' || srcDevice.type === 'docker-host') {
     const gatewayIp = srcIface.gateway;
     if (!gatewayIp) {
       return { success: false, reason: 'No default gateway configured on source host.', failedCondition: 1 };
@@ -217,8 +220,8 @@ function evaluateRouting(
   destIp: string,
   dstResult: { device: Device; iface: NetworkInterface } | undefined
 ): PingResult {
-  // Check if routing is enabled (skip for routers, firewalls, vpc-routers, and ec2 which route via VPC)
-  if (!routerDevice.routing.enabled && routerDevice.type !== 'router' && routerDevice.type !== 'firewall' && routerDevice.type !== 'vpc-router' && routerDevice.type !== 'ec2') {
+  // Check if routing is enabled (skip for routers, firewalls, vpc-routers, ec2, and OS servers which route via gateway)
+  if (!routerDevice.routing.enabled && routerDevice.type !== 'router' && routerDevice.type !== 'firewall' && routerDevice.type !== 'vpc-router' && routerDevice.type !== 'ec2' && routerDevice.type !== 'linux-server' && routerDevice.type !== 'windows-server' && routerDevice.type !== 'docker-host') {
     return { success: false, reason: `Routing is not enabled on ${routerDevice.hostname}.`, failedCondition: 4 };
   }
 
@@ -251,12 +254,12 @@ function evaluateRouting(
           // Check AWS conditions on source and destination
           const actualDst = dstResult || findDeviceByIp(state, destIp);
           if (actualDst) {
-            // Find the original source device for AWS checks
-            const srcEc2 = findOriginalSourceDevice(state, routerDevice);
-            if (srcEc2) {
-              const awsCheck = checkAWSConditions(state, srcEc2, actualDst.device, destIp);
-              if (!awsCheck.success) return awsCheck;
-            }
+            // Find the original source device (exclude destination from candidates)
+            const srcForCheck = findOriginalSourceDeviceExcluding(state, routerDevice, actualDst.device.id) || routerDevice;
+            const awsCheck = checkAWSConditions(state, srcForCheck, actualDst.device, destIp);
+            if (!awsCheck.success) return awsCheck;
+            const osCheck = checkOSConditions(state, srcForCheck, actualDst.device, destIp);
+            if (!osCheck.success) return osCheck;
           }
           return { success: true };
         }
@@ -515,11 +518,11 @@ function findOriginalSourceIp(state: NetworkState, fromDevice: Device, fw: Devic
       let hostDevId: string | undefined;
       if (link.from.device === fromDevice.id) {
         const dev = findDevice(state, link.to.device);
-        if (dev?.type === 'host' || dev?.type === 'ec2') hostDevId = dev.id;
+        if (dev?.type === 'host' || dev?.type === 'ec2' || dev?.type === 'linux-server' || dev?.type === 'windows-server' || dev?.type === 'docker-host') hostDevId = dev.id;
       }
       if (link.to.device === fromDevice.id) {
         const dev = findDevice(state, link.from.device);
-        if (dev?.type === 'host' || dev?.type === 'ec2') hostDevId = dev.id;
+        if (dev?.type === 'host' || dev?.type === 'ec2' || dev?.type === 'linux-server' || dev?.type === 'windows-server' || dev?.type === 'docker-host') hostDevId = dev.id;
       }
       if (hostDevId) {
         const host = findDevice(state, hostDevId);
@@ -542,11 +545,27 @@ function findOriginalSourceDevice(state: NetworkState, routerDevice: Device): De
     let devId: string | undefined;
     if (link.from.device === routerDevice.id) {
       const dev = findDevice(state, link.to.device);
-      if (dev && (dev.type === 'host' || dev.type === 'ec2')) devId = dev.id;
+      if (dev && (dev.type === 'host' || dev.type === 'ec2' || dev.type === 'linux-server' || dev.type === 'windows-server' || dev.type === 'docker-host')) devId = dev.id;
     }
     if (link.to.device === routerDevice.id) {
       const dev = findDevice(state, link.from.device);
-      if (dev && (dev.type === 'host' || dev.type === 'ec2')) devId = dev.id;
+      if (dev && (dev.type === 'host' || dev.type === 'ec2' || dev.type === 'linux-server' || dev.type === 'windows-server' || dev.type === 'docker-host')) devId = dev.id;
+    }
+    if (devId) return findDevice(state, devId);
+  }
+  return undefined;
+}
+
+function findOriginalSourceDeviceExcluding(state: NetworkState, routerDevice: Device, excludeId: string): Device | undefined {
+  for (const link of state.links) {
+    let devId: string | undefined;
+    if (link.from.device === routerDevice.id) {
+      const dev = findDevice(state, link.to.device);
+      if (dev && dev.id !== excludeId && (dev.type === 'host' || dev.type === 'ec2' || dev.type === 'linux-server' || dev.type === 'windows-server' || dev.type === 'docker-host')) devId = dev.id;
+    }
+    if (link.to.device === routerDevice.id) {
+      const dev = findDevice(state, link.from.device);
+      if (dev && dev.id !== excludeId && (dev.type === 'host' || dev.type === 'ec2' || dev.type === 'linux-server' || dev.type === 'windows-server' || dev.type === 'docker-host')) devId = dev.id;
     }
     if (devId) return findDevice(state, devId);
   }
@@ -647,8 +666,8 @@ function isDirectlyConnectedToRouter(state: NetworkState, hostDevice: Device, ho
     return true;
   }
 
-  // EC2 instances are directly connected at L3
-  if (otherDevice.type === 'ec2') {
+  // EC2/server instances are directly connected at L3
+  if (otherDevice.type === 'ec2' || otherDevice.type === 'linux-server' || otherDevice.type === 'windows-server' || otherDevice.type === 'docker-host') {
     return true;
   }
 
@@ -787,4 +806,154 @@ function cidrContains(cidr: string, ip: string): boolean {
   const netNum = ipToNum(net);
   const ipNum = ipToNum(ip);
   return ((netNum & mask) >>> 0) === ((ipNum & mask) >>> 0);
+}
+
+
+/**
+ * Condition 7: Check OS-level networking (iptables, Windows Firewall, services, DNS).
+ */
+function checkOSConditions(state: NetworkState, srcDevice: Device, dstDevice: Device, destIp: string): PingResult {
+  // Check destination's OS firewall (inbound)
+  if (dstDevice.os) {
+    const inboundCheck = checkOSFirewallInbound(dstDevice, srcDevice, destIp);
+    if (!inboundCheck.success) return inboundCheck;
+
+    // Check if the target service is actually running
+    const serviceCheck = checkServiceRunning(dstDevice);
+    if (!serviceCheck.success) return serviceCheck;
+  }
+
+  // Check source's OS firewall (outbound)
+  if (srcDevice.os) {
+    const outboundCheck = checkOSFirewallOutbound(srcDevice, destIp);
+    if (!outboundCheck.success) return outboundCheck;
+
+    // Check DNS resolution if destination is referenced by name
+    const dnsCheck = checkDNS(srcDevice, destIp);
+    if (!dnsCheck.success) return dnsCheck;
+  }
+
+  return { success: true };
+}
+
+function checkOSFirewallInbound(device: Device, srcDevice: Device, destIp: string): PingResult {
+  const os = device.os!;
+  const srcIp = srcDevice.interfaces.find(i => i.ip)?.ip || '0.0.0.0';
+
+  // Linux iptables
+  if (os.type === 'linux' && os.iptables) {
+    const inputChain = os.iptables.chains.find(c => c.name === 'INPUT');
+    if (inputChain) {
+      // Check rules in order
+      for (const rule of inputChain.rules.sort((a, b) => a.num - b.num)) {
+        if (ruleMatchesTraffic(rule, srcIp, destIp, 'icmp')) {
+          if (rule.action === 'DROP' || rule.action === 'REJECT') {
+            return {
+              success: false,
+              reason: `Blocked by iptables on ${device.hostname}: INPUT rule ${rule.num} ${rule.action}s ${rule.protocol} from ${rule.source}.`,
+              failedCondition: 7,
+            };
+          }
+          if (rule.action === 'ACCEPT') return { success: true };
+        }
+      }
+      // No rule matched — use chain policy
+      if (inputChain.policy === 'DROP') {
+        return {
+          success: false,
+          reason: `Blocked by iptables on ${device.hostname}: INPUT chain policy is DROP and no rule allows ICMP from ${srcIp}.`,
+          failedCondition: 7,
+        };
+      }
+    }
+  }
+
+  // Windows Firewall
+  if (os.type === 'windows' && os.windowsFirewall) {
+    const wf = os.windowsFirewall;
+    // Check if firewall is enabled
+    const activeProfile = wf.profiles.find(p => p.enabled);
+    if (activeProfile && activeProfile.defaultInbound === 'Block') {
+      // Check for an allow rule
+      const allowed = wf.rules.some(r =>
+        r.enabled &&
+        r.direction === 'Inbound' &&
+        r.action === 'Allow' &&
+        (r.protocol === 'ICMPv4' || r.protocol === 'Any') &&
+        (r.remoteAddress === 'Any' || r.remoteAddress === '*' || cidrContains(r.remoteAddress || '0.0.0.0/0', srcIp))
+      );
+      if (!allowed) {
+        return {
+          success: false,
+          reason: `Blocked by Windows Firewall on ${device.hostname}: no inbound rule allows ICMPv4. Default action: Block.`,
+          failedCondition: 7,
+        };
+      }
+    }
+  }
+
+  return { success: true };
+}
+
+function checkOSFirewallOutbound(device: Device, destIp: string): PingResult {
+  const os = device.os!;
+
+  // Linux iptables OUTPUT chain
+  if (os.type === 'linux' && os.iptables) {
+    const outputChain = os.iptables.chains.find(c => c.name === 'OUTPUT');
+    if (outputChain) {
+      for (const rule of outputChain.rules.sort((a, b) => a.num - b.num)) {
+        if (ruleMatchesTraffic(rule, device.interfaces[0]?.ip || '0.0.0.0', destIp, 'icmp')) {
+          if (rule.action === 'DROP' || rule.action === 'REJECT') {
+            return {
+              success: false,
+              reason: `Blocked by iptables on ${device.hostname}: OUTPUT rule ${rule.num} ${rule.action}s traffic to ${destIp}.`,
+              failedCondition: 7,
+            };
+          }
+          if (rule.action === 'ACCEPT') return { success: true };
+        }
+      }
+      if (outputChain.policy === 'DROP') {
+        return {
+          success: false,
+          reason: `Blocked by iptables on ${device.hostname}: OUTPUT chain policy is DROP.`,
+          failedCondition: 7,
+        };
+      }
+    }
+  }
+
+  return { success: true };
+}
+
+function checkServiceRunning(device: Device): PingResult {
+  // For ICMP ping, we don't need a specific service running
+  // But if the device has services configured and none are running, it might indicate the network stack is down
+  // This check is mainly used for port-based connectivity scenarios
+  return { success: true };
+}
+
+function checkDNS(device: Device, destIp: string): PingResult {
+  // DNS check only applies if destination is a hostname (not IP)
+  // Since our win conditions use IPs, this passes by default
+  // But can be used in scenarios where DNS resolution is the fault
+  const os = device.os!;
+  if (os.dns && os.dns.nameservers.length === 0) {
+    // No nameservers configured — only matters if trying to resolve a name
+    // For IP-based ping, DNS is not needed
+  }
+  return { success: true };
+}
+
+function ruleMatchesTraffic(rule: import('./types.js').IptablesRule, srcIp: string, destIp: string, protocol: string): boolean {
+  // Check protocol
+  if (rule.protocol !== 'all' && rule.protocol !== protocol) return false;
+  // Check source
+  if (rule.source !== '0.0.0.0/0' && !cidrContains(rule.source, srcIp)) return false;
+  // Check destination
+  if (rule.destination !== '0.0.0.0/0' && !cidrContains(rule.destination, destIp)) return false;
+  // State-tracking rules only match established connections, not new pings
+  if (rule.state && rule.state.includes('ESTABLISHED')) return false;
+  return true;
 }

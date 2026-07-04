@@ -84,6 +84,21 @@ function execModeCommand(
   if (keyword === 'aws') {
     return handleAWSCommand(state, device, parts.slice(1));
   }
+  if (keyword === 'iptables' || keyword === 'ip6tables') {
+    return handleIptablesCommand(state, device, parts);
+  }
+  if (keyword === 'systemctl') {
+    return handleSystemctlCommand(state, device, parts.slice(1));
+  }
+  if (keyword === 'cat') {
+    return handleCatCommand(state, device, parts.slice(1));
+  }
+  if (keyword === 'docker') {
+    return handleDockerCommand(state, device, parts.slice(1));
+  }
+  if (keyword === 'get-netfirewallrule' || keyword === 'new-netfirewallrule' || keyword === 'set-netfirewallrule') {
+    return handlePowerShellFirewall(state, device, parts);
+  }
   if (keyword === 'connect') {
     return { output: '% Use the device selector to change devices.', stateChanged: false };
   }
@@ -797,4 +812,257 @@ function formatVPCPeering(device: Device): string {
     out += `${p.id.padEnd(20)} ${(p.name||'-').padEnd(15)} ${p.localVpc.padEnd(12)} ${p.peerVpc.padEnd(12)} ${p.status}\n`;
   }
   return out;
+}
+
+
+// ===== LINUX CLI COMMANDS =====
+
+function handleIptablesCommand(state: NetworkState, device: Device, parts: string[]): CommandResult {
+  if (!device.os || device.os.type !== 'linux') {
+    return { output: '% This device does not run Linux.', stateChanged: false };
+  }
+  if (!device.os.iptables) {
+    device.os.iptables = { chains: [{ name: 'INPUT', policy: 'ACCEPT', rules: [] }, { name: 'OUTPUT', policy: 'ACCEPT', rules: [] }, { name: 'FORWARD', policy: 'ACCEPT', rules: [] }] };
+  }
+
+  const args = parts.slice(1);
+  const action = args[0]?.toUpperCase();
+
+  // iptables -L (list)
+  if (action === '-L' || action === '--LIST') {
+    const chainName = args[1]?.toUpperCase();
+    const chains = chainName ? device.os.iptables.chains.filter(c => c.name === chainName) : device.os.iptables.chains;
+    let out = '';
+    for (const chain of chains) {
+      out += `Chain ${chain.name} (policy ${chain.policy})\n`;
+      out += `num  target     prot  source               destination          extra\n`;
+      for (const r of chain.rules) {
+        out += `${String(r.num).padEnd(4)} ${r.action.padEnd(10)} ${r.protocol.padEnd(5)} ${r.source.padEnd(20)} ${r.destination.padEnd(20)} ${r.dport ? 'dpt:' + r.dport : ''} ${r.state ? 'state ' + r.state : ''}\n`;
+      }
+      out += '\n';
+    }
+    return { output: out || '% No chains found.', stateChanged: false };
+  }
+
+  // iptables -A (append) or -I (insert)
+  if (action === '-A' || action === '-I' || action === '--APPEND' || action === '--INSERT') {
+    const chainName = args[1]?.toUpperCase();
+    const chain = device.os.iptables.chains.find(c => c.name === chainName);
+    if (!chain) return { output: `% Chain '${chainName}' not found.`, stateChanged: false };
+
+    // Parse rule flags
+    const protocol = extractArg(args, '-p') || 'all';
+    const source = extractArg(args, '-s') || '0.0.0.0/0';
+    const destination = extractArg(args, '-d') || '0.0.0.0/0';
+    const dport = extractArg(args, '--dport');
+    const jump = extractArg(args, '-j') || 'ACCEPT';
+    const stateFlag = extractArg(args, '--state') || extractArg(args, '-m');
+
+    const ruleNum = action === '-I' ? 1 : (chain.rules.length > 0 ? Math.max(...chain.rules.map(r => r.num)) + 1 : 1);
+    const rule: any = { num: ruleNum, protocol, source, destination, action: jump };
+    if (dport) rule.dport = dport;
+    if (stateFlag && stateFlag !== 'state') rule.state = stateFlag;
+
+    if (action === '-I') {
+      // Insert at beginning — shift existing rule numbers
+      chain.rules.forEach(r => r.num++);
+      chain.rules.unshift(rule);
+    } else {
+      chain.rules.push(rule);
+    }
+
+    return { output: `% Rule added to ${chainName}: ${jump} ${protocol} from ${source} to ${destination}${dport ? ' dpt:' + dport : ''}`, stateChanged: true };
+  }
+
+  // iptables -D (delete)
+  if (action === '-D' || action === '--DELETE') {
+    const chainName = args[1]?.toUpperCase();
+    const chain = device.os.iptables.chains.find(c => c.name === chainName);
+    if (!chain) return { output: `% Chain '${chainName}' not found.`, stateChanged: false };
+    const ruleNum = parseInt(args[2]);
+    if (!isNaN(ruleNum)) {
+      chain.rules = chain.rules.filter(r => r.num !== ruleNum);
+      return { output: `% Rule ${ruleNum} deleted from ${chainName}.`, stateChanged: true };
+    }
+    return { output: '% Usage: iptables -D <chain> <rule-num>', stateChanged: false };
+  }
+
+  // iptables -P (policy)
+  if (action === '-P' || action === '--POLICY') {
+    const chainName = args[1]?.toUpperCase();
+    const policy = args[2]?.toUpperCase();
+    const chain = device.os.iptables.chains.find(c => c.name === chainName);
+    if (!chain) return { output: `% Chain '${chainName}' not found.`, stateChanged: false };
+    if (policy !== 'ACCEPT' && policy !== 'DROP') return { output: '% Policy must be ACCEPT or DROP.', stateChanged: false };
+    chain.policy = policy as 'ACCEPT' | 'DROP';
+    return { output: `% ${chainName} policy set to ${policy}.`, stateChanged: true };
+  }
+
+  return { output: '% Usage: iptables -L [chain] | -A <chain> -p <proto> -s <src> -d <dst> --dport <port> -j <action> | -D <chain> <num> | -P <chain> <policy>', stateChanged: false };
+}
+
+function handleSystemctlCommand(state: NetworkState, device: Device, args: string[]): CommandResult {
+  if (!device.os || device.os.type !== 'linux') {
+    return { output: '% This device does not run Linux.', stateChanged: false };
+  }
+  if (!device.os.services) device.os.services = [];
+
+  const action = args[0]?.toLowerCase();
+  const serviceName = args[1];
+
+  if (action === 'status') {
+    if (serviceName) {
+      const svc = device.os.services.find(s => s.name === serviceName);
+      if (!svc) return { output: `% Unit ${serviceName} not found.`, stateChanged: false };
+      const dot = svc.status === 'running' ? '\u25cf' : '\u25cb';
+      return { output: `${dot} ${svc.name}\n   Loaded: loaded (enabled: ${svc.enabled})\n   Active: ${svc.status}${svc.port ? '\n   Listen: 0.0.0.0:' + svc.port : ''}`, stateChanged: false };
+    }
+    let out = 'UNIT                    STATUS    ENABLED\n';
+    for (const svc of device.os.services) {
+      out += `${svc.name.padEnd(23)} ${svc.status.padEnd(9)} ${svc.enabled}\n`;
+    }
+    return { output: out, stateChanged: false };
+  }
+
+  if (action === 'start' || action === 'restart') {
+    const svc = device.os.services.find(s => s.name === serviceName);
+    if (!svc) return { output: `% Unit ${serviceName} not found.`, stateChanged: false };
+    svc.status = 'running';
+    return { output: `% ${serviceName} started.`, stateChanged: true };
+  }
+
+  if (action === 'stop') {
+    const svc = device.os.services.find(s => s.name === serviceName);
+    if (!svc) return { output: `% Unit ${serviceName} not found.`, stateChanged: false };
+    svc.status = 'stopped';
+    return { output: `% ${serviceName} stopped.`, stateChanged: true };
+  }
+
+  if (action === 'enable') {
+    const svc = device.os.services.find(s => s.name === serviceName);
+    if (!svc) return { output: `% Unit ${serviceName} not found.`, stateChanged: false };
+    svc.enabled = true;
+    return { output: `% ${serviceName} enabled.`, stateChanged: true };
+  }
+
+  return { output: '% Usage: systemctl status|start|stop|restart|enable <service>', stateChanged: false };
+}
+
+function handleCatCommand(state: NetworkState, device: Device, args: string[]): CommandResult {
+  const file = args[0];
+  if (!device.os) return { output: '% No OS configuration on this device.', stateChanged: false };
+
+  if (file === '/etc/resolv.conf') {
+    if (!device.os.dns) return { output: '# /etc/resolv.conf\n# No DNS configured', stateChanged: false };
+    let out = '# /etc/resolv.conf\n';
+    if (device.os.dns.searchDomains) out += `search ${device.os.dns.searchDomains.join(' ')}\n`;
+    for (const ns of device.os.dns.nameservers) out += `nameserver ${ns}\n`;
+    return { output: out, stateChanged: false };
+  }
+
+  if (file === '/etc/hosts') {
+    let out = '# /etc/hosts\n127.0.0.1  localhost\n';
+    if (device.os.hostsFile) {
+      for (const entry of device.os.hostsFile) out += `${entry.ip}  ${entry.hostname}\n`;
+    }
+    return { output: out, stateChanged: false };
+  }
+
+  if (file === '/etc/docker/daemon.json') {
+    return { output: '{\n  "iptables": true,\n  "bridge": "docker0",\n  "default-address-pools": [{"base": "172.17.0.0/16", "size": 24}]\n}', stateChanged: false };
+  }
+
+  return { output: `% cat: ${file}: No such file or directory`, stateChanged: false };
+}
+
+function handleDockerCommand(state: NetworkState, device: Device, args: string[]): CommandResult {
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === 'ps') {
+    if (!device.os?.services) return { output: 'CONTAINER ID   IMAGE   STATUS   PORTS   NAMES\n', stateChanged: false };
+    let out = 'CONTAINER ID   IMAGE              STATUS    PORTS                    NAMES\n';
+    for (const svc of device.os.services) {
+      const status = svc.status === 'running' ? 'Up 2 hours' : 'Exited (1)';
+      const ports = svc.port ? `0.0.0.0:${svc.port}->${svc.port}/${svc.protocol || 'tcp'}` : '';
+      out += `${(svc.name.substring(0, 8) + 'abc12').padEnd(14)} ${(svc.name + ':latest').padEnd(18)} ${status.padEnd(9)} ${ports.padEnd(24)} ${svc.name}\n`;
+    }
+    return { output: out, stateChanged: false };
+  }
+
+  if (sub === 'network' && args[1]?.toLowerCase() === 'ls') {
+    return { output: 'NETWORK ID     NAME      DRIVER    SCOPE\nabc123def456   bridge    bridge    local\ndef789ghi012   host      host      local\nghi345jkl678   none      null      local', stateChanged: false };
+  }
+
+  if (sub === 'network' && args[1]?.toLowerCase() === 'inspect') {
+    return { output: '[\n  {\n    "Name": "bridge",\n    "IPAM": { "Config": [{ "Subnet": "172.17.0.0/16", "Gateway": "172.17.0.1" }] },\n    "Containers": {}\n  }\n]', stateChanged: false };
+  }
+
+  if (sub === 'start') {
+    const container = args[1];
+    if (!container) return { output: '% Usage: docker start <container>', stateChanged: false };
+    const svc = device.os?.services?.find(s => s.name === container);
+    if (svc) { svc.status = 'running'; return { output: container, stateChanged: true }; }
+    return { output: `Error: No such container: ${container}`, stateChanged: false };
+  }
+
+  if (sub === 'stop') {
+    const container = args[1];
+    if (!container) return { output: '% Usage: docker stop <container>', stateChanged: false };
+    const svc = device.os?.services?.find(s => s.name === container);
+    if (svc) { svc.status = 'stopped'; return { output: container, stateChanged: true }; }
+    return { output: `Error: No such container: ${container}`, stateChanged: false };
+  }
+
+  return { output: '% Usage: docker ps | docker network ls | docker network inspect <name> | docker start|stop <container>', stateChanged: false };
+}
+
+function handlePowerShellFirewall(state: NetworkState, device: Device, parts: string[]): CommandResult {
+  if (!device.os || device.os.type !== 'windows') {
+    return { output: '% This device does not run Windows.', stateChanged: false };
+  }
+  if (!device.os.windowsFirewall) return { output: '% Windows Firewall not configured.', stateChanged: false };
+
+  const cmd = parts[0].toLowerCase();
+
+  if (cmd === 'get-netfirewallrule') {
+    let out = 'Name                  DisplayName                    Enabled Direction Action Protocol\n';
+    out += '----                  -----------                    ------- --------- ------ --------\n';
+    for (const r of device.os.windowsFirewall.rules) {
+      out += `${r.name.padEnd(21)} ${r.displayName.padEnd(30)} ${String(r.enabled).padEnd(7)} ${r.direction.padEnd(9)} ${r.action.padEnd(6)} ${r.protocol}\n`;
+    }
+    return { output: out, stateChanged: false };
+  }
+
+  if (cmd === 'new-netfirewallrule') {
+    const name = extractArg(parts, '-Name') || extractArg(parts, '-DisplayName') || 'NewRule';
+    const displayName = extractArg(parts, '-DisplayName') || name;
+    const direction = (extractArg(parts, '-Direction') || 'Inbound') as 'Inbound' | 'Outbound';
+    const action = (extractArg(parts, '-Action') || 'Allow') as 'Allow' | 'Block';
+    const protocol = (extractArg(parts, '-Protocol') || 'Any') as 'TCP' | 'UDP' | 'ICMPv4' | 'Any';
+    const localPort = extractArg(parts, '-LocalPort');
+    const remoteAddr = extractArg(parts, '-RemoteAddress');
+
+    const rule: any = { name, displayName, enabled: true, direction, action, protocol };
+    if (localPort) rule.localPort = localPort;
+    if (remoteAddr) rule.remoteAddress = remoteAddr;
+
+    device.os.windowsFirewall.rules.push(rule);
+    return { output: `% Firewall rule '${displayName}' created: ${direction} ${action} ${protocol}${localPort ? ' port ' + localPort : ''}`, stateChanged: true };
+  }
+
+  if (cmd === 'set-netfirewallrule') {
+    const name = extractArg(parts, '-Name') || extractArg(parts, '-DisplayName');
+    if (!name) return { output: '% Usage: Set-NetFirewallRule -Name <name> -Enabled True|False', stateChanged: false };
+    const rule = device.os.windowsFirewall.rules.find(r => r.name === name || r.displayName === name);
+    if (!rule) return { output: `% Rule '${name}' not found.`, stateChanged: false };
+
+    const enabled = extractArg(parts, '-Enabled');
+    if (enabled) rule.enabled = enabled.toLowerCase() === 'true';
+    const actionVal = extractArg(parts, '-Action');
+    if (actionVal) rule.action = actionVal as 'Allow' | 'Block';
+
+    return { output: `% Rule '${rule.displayName}' updated.`, stateChanged: true };
+  }
+
+  return { output: '% Usage: Get-NetFirewallRule | New-NetFirewallRule -Name <n> -Direction Inbound -Action Allow -Protocol ICMPv4 | Set-NetFirewallRule -Name <n> -Enabled True', stateChanged: false };
 }

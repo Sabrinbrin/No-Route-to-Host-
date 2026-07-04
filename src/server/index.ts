@@ -17,8 +17,42 @@ import {
 } from '../engine/scenario-loader.js';
 import { executeCommand } from '../engine/cli-parser.js';
 
-// ===== State =====
-let currentGameState: GameState | null = null;
+// ===== Session-Based State (supports concurrent users) =====
+interface Session {
+  id: string;
+  gameState: GameState | null;
+  lastActivity: number;
+}
+
+const sessions: Map<string, Session> = new Map();
+const SESSION_TTL = 30 * 60 * 1000; // 30 minutes
+let sessionCounter = 0;
+
+function getOrCreateSession(sessionId?: string): Session {
+  if (sessionId && sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)!;
+    session.lastActivity = Date.now();
+    return session;
+  }
+  // Create new session
+  const id = sessionId || `s_${Date.now()}_${++sessionCounter}`;
+  const session: Session = { id, gameState: null, lastActivity: Date.now() };
+  sessions.set(id, session);
+  return session;
+}
+
+function cleanupSessions(): void {
+  const now = Date.now();
+  for (const [id, session] of sessions) {
+    if (now - session.lastActivity > SESSION_TTL) {
+      sessions.delete(id);
+    }
+  }
+}
+
+// Cleanup stale sessions every 5 minutes
+setInterval(cleanupSessions, 5 * 60 * 1000);
+
 const availableScenarios: Map<string, Scenario> = new Map();
 
 // ===== Load Scenarios =====
@@ -49,87 +83,92 @@ const MIME: Record<string, string> = {
 };
 
 // ===== API Handlers =====
-function handleApi(path: string, body: any): any {
+function handleApi(path: string, body: any, session: Session): any {
   switch (path) {
     case '/api/scenarios':
-      return Array.from(availableScenarios.values()).map(s => ({
-        id: s.id, title: s.title, difficulty: s.difficulty,
-      }));
+      return {
+        scenarios: Array.from(availableScenarios.values()).map(s => ({
+          id: s.id, title: s.title, difficulty: s.difficulty,
+        })),
+        sessionId: session.id,
+        activeSessions: sessions.size,
+      };
 
     case '/api/load': {
       const scenario = availableScenarios.get(body.id);
       if (!scenario) return { error: `Scenario '${body.id}' not found` };
-      currentGameState = loadScenario(scenario);
+      session.gameState = loadScenario(scenario);
       return {
         success: true,
+        sessionId: session.id,
         id: scenario.id,
         title: scenario.title,
         difficulty: scenario.difficulty,
         ticket: scenario.ticket,
-        topology: currentGameState.network,
+        topology: session.gameState.network,
         winCondition: scenario.win_condition,
         layout: scenario.layout || {},
       };
     }
 
     case '/api/command': {
-      if (!currentGameState) return { error: 'No scenario loaded' };
+      if (!session.gameState) return { error: 'No scenario loaded. POST /api/load first.' };
       const { device, command } = body;
-      if (!currentGameState.contexts[device]) {
-        currentGameState.contexts[device] = { mode: 'exec', currentDevice: device };
+      if (!session.gameState.contexts[device]) {
+        session.gameState.contexts[device] = { mode: 'exec', currentDevice: device };
       }
-      const ctx = currentGameState.contexts[device];
-      const result = executeCommand(currentGameState.network, device, command, ctx);
-      currentGameState.commandCount++;
+      const ctx = session.gameState.contexts[device];
+      const result = executeCommand(session.gameState.network, device, command, ctx);
+      session.gameState.commandCount++;
 
       // Check win condition after state changes
       let winCheck = null;
       if (result.stateChanged) {
-        winCheck = checkWinCondition(currentGameState.network, currentGameState.scenario.win_condition);
-        if (winCheck.resolved) currentGameState.resolved = true;
+        winCheck = checkWinCondition(session.gameState.network, session.gameState.scenario.win_condition);
+        if (winCheck.resolved) session.gameState.resolved = true;
       }
 
       return {
         output: result.output,
         stateChanged: result.stateChanged,
         winCheck,
-        topology: result.stateChanged ? currentGameState.network : undefined,
-        commandCount: currentGameState.commandCount,
+        topology: result.stateChanged ? session.gameState.network : undefined,
+        commandCount: session.gameState.commandCount,
         context: { mode: ctx.mode, currentInterface: ctx.currentInterface },
       };
     }
 
     case '/api/check': {
-      if (!currentGameState) return { error: 'No scenario loaded' };
-      const result = checkWinCondition(currentGameState.network, currentGameState.scenario.win_condition);
+      if (!session.gameState) return { error: 'No scenario loaded' };
+      const result = checkWinCondition(session.gameState.network, session.gameState.scenario.win_condition);
       return {
         ...result,
-        commandCount: currentGameState.commandCount,
-        elapsed: Date.now() - currentGameState.startTime,
+        commandCount: session.gameState.commandCount,
+        elapsed: Date.now() - session.gameState.startTime,
       };
     }
 
     case '/api/reset': {
-      if (!currentGameState) return { error: 'No scenario loaded' };
-      currentGameState = loadScenario(currentGameState.scenario);
-      return { success: true, topology: currentGameState.network };
+      if (!session.gameState) return { error: 'No scenario loaded' };
+      session.gameState = loadScenario(session.gameState.scenario);
+      return { success: true, topology: session.gameState.network };
     }
 
     case '/api/state': {
-      if (!currentGameState) return { error: 'No scenario loaded' };
+      if (!session.gameState) return { error: 'No scenario loaded' };
       return {
-        topology: currentGameState.network,
-        ticket: currentGameState.scenario.ticket,
-        layout: currentGameState.scenario.layout || {},
-        commandCount: currentGameState.commandCount,
-        elapsed: Date.now() - currentGameState.startTime,
-        resolved: currentGameState.resolved,
+        topology: session.gameState.network,
+        ticket: session.gameState.scenario.ticket,
+        layout: session.gameState.scenario.layout || {},
+        commandCount: session.gameState.commandCount,
+        elapsed: Date.now() - session.gameState.startTime,
+        resolved: session.gameState.resolved,
       };
     }
 
     case '/api/validate': {
-      // Run validation on a scenario by ID (or current scenario)
-      const scenarioId = body.id || (currentGameState ? currentGameState.scenario.id : null);
+      // Run validation on a scenario by ID
+      const scenarioId = body.id || (session.gameState ? session.gameState.scenario.id : null);
       if (!scenarioId) return { error: 'No scenario specified' };
       const scenario = availableScenarios.get(scenarioId);
       if (!scenario) return { error: `Scenario '${scenarioId}' not found` };
@@ -230,8 +269,12 @@ const server = createServer((req, res) => {
       }
 
       try {
-        const result = handleApi(url, parsed);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        // Session management: get session from header or body
+        const sessionId = (req.headers['x-session-id'] as string) || parsed.sessionId || undefined;
+        const session = getOrCreateSession(sessionId);
+
+        const result = handleApi(url, parsed, session);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'X-Session-Id': session.id });
         res.end(JSON.stringify(result));
       } catch (e: any) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -247,8 +290,10 @@ const server = createServer((req, res) => {
 
   // GET /api/scenarios (convenience)
   if (url === '/api/scenarios' && req.method === 'GET') {
-    const result = handleApi('/api/scenarios', {});
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    const sessionId = req.headers['x-session-id'] as string | undefined;
+    const session = getOrCreateSession(sessionId);
+    const result = handleApi('/api/scenarios', {}, session);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'X-Session-Id': session.id });
     res.end(JSON.stringify(result));
     return;
   }
@@ -259,6 +304,7 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({
       status: 'ok',
       scenarios: availableScenarios.size,
+      activeSessions: sessions.size,
       uptime: Math.floor(process.uptime ? process.uptime() : 0),
     }));
     return;
