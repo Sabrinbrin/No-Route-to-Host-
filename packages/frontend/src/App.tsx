@@ -148,13 +148,15 @@ function Play(props: {
             <span className="b" style={{ background: '#f85149' }} />
             <span className="b" style={{ background: '#f5a623' }} />
             <span className="b" style={{ background: '#3fb950' }} />
-            <span className="name">{hostname} — console session</span>
+            <span className="name">{hostname} — {session.network.devices.find(d => d.id === device)?.type ?? 'device'} console</span>
             <button className="reset" onClick={onReset}>reset</button>
           </div>
           <TerminalView session={session} device={device} hostname={hostname} onWin={onWin} />
           <div className="devtabs">
+            <span className="devtabs-label">Devices (click to switch terminal):</span>
             {session.network.devices.map((d) => (
               <button key={d.id} className={`devtab ${d.id === device ? 'active' : ''}`} onClick={() => onDevice(d.id)}>
+                <span className="devtab-icon">{d.type === 'switch' ? '🔀' : d.type === 'router' ? '🌐' : d.type === 'firewall' ? '🛡️' : d.type === 'ec2' ? '☁️' : d.type === 'vpc-router' ? '🌐' : d.type === 'linux-server' ? '🐧' : d.type === 'windows-server' ? '🪟' : d.type === 'docker-host' ? '🐳' : '🖥️'}</span>
                 {d.hostname}
               </button>
             ))}
@@ -165,6 +167,9 @@ function Play(props: {
           <Topology network={session.network} solved={solved} />
           <div style={{ marginTop: 14, fontFamily: 'var(--mono)', fontSize: 12, color: '#8b949e', padding: '0 4px' }}>
             try: show running-config · ping {session.scenario.win_condition.destination} · ?
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: '#5b6472', padding: '0 4px' }}>
+            💡 Switch devices below the terminal to ping from different perspectives
           </div>
         </div>
       </div>
