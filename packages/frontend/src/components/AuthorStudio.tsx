@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   listScenarios,
   getScenarioYaml,
-  validateScenario,
-  ValidationReport,
 } from '../game';
-import { parseScenario } from '@nrth/engine';
+import { parseScenario, validateScenario, type ValidationReport } from '@nrth/engine';
 
 const BLANK_TEMPLATE = `id: my-new-scenario
 title: My New Scenario

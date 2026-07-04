@@ -23,8 +23,11 @@ jobs:
       - name: Install workspaces
         run: npm ci
 
-      - name: Type-check & build (engine + packages + web)
+      - name: Type-check & build (engine + packages)
         run: npm run build
+
+      - name: Type-check frontend (catches JSX/TSX errors)
+        run: npx tsc --noEmit -p packages/frontend
 
       - name: Engine unit tests
         run: node packages/engine/dist/test/index.js
@@ -36,3 +39,8 @@ jobs:
 
       - name: MCP server smoke test
         run: node scripts/smoke-mcp.mjs
+
+      - name: Frontend builds for Pages
+        run: |
+          cd packages/frontend
+          npx vite build --base /${{ github.event.repository.name }}/
