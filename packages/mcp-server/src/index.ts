@@ -244,33 +244,33 @@ function registerResourcesAndPrompts(): void {
 // Prompts (static — don't depend on loaded data)
 server.prompt(
   'validate-scenario',
-  { description: 'Validate a scenario is solvable and fair. Guides the agent through the full fairness gate.', arguments: [{ name: 'scenario_id', description: 'ID of the scenario to validate', required: true }] },
-  async ({ scenario_id }) => ({
+  'Validate a scenario is solvable and fair. Guides the agent through the full fairness gate.',
+  async (extra) => ({
     messages: [{
-      role: 'user',
-      content: { type: 'text', text: `Validate scenario "${scenario_id}" using these steps:\n\n1. Call load_scenario with id "${scenario_id}"\n2. Call check_win_condition — it MUST return resolved=false (fault present)\n3. Read the ticket with get_ticket to understand the symptom\n4. Execute the reference solution commands using run_command\n5. Call check_win_condition — it MUST return resolved=true (fix works)\n6. Call validate_scenario with id "${scenario_id}" for the full fairness report\n\nReport PASS or FAIL with the verdict.` },
+      role: 'user' as const,
+      content: { type: 'text' as const, text: `Validate a scenario using these steps:\n\n1. Call list_scenarios to see available scenarios\n2. Call load_scenario with the chosen id\n3. Call check_win_condition — it MUST return resolved=false (fault present)\n4. Read the ticket with get_ticket to understand the symptom\n5. Execute the reference solution commands using run_command\n6. Call check_win_condition — it MUST return resolved=true (fix works)\n7. Call validate_scenario for the full fairness report\n\nReport PASS or FAIL with the verdict.` },
     }],
   })
 );
 
 server.prompt(
   'diagnose-scenario',
-  { description: 'Play a scenario as a student would: investigate, hypothesize, fix.', arguments: [{ name: 'scenario_id', description: 'ID of the scenario to diagnose', required: true }] },
-  async ({ scenario_id }) => ({
+  'Play a scenario as a student would: investigate, hypothesize, fix.',
+  async (extra) => ({
     messages: [{
-      role: 'user',
-      content: { type: 'text', text: `You are a junior network engineer. Diagnose scenario "${scenario_id}":\n\n1. Call load_scenario with id "${scenario_id}"\n2. Call get_ticket to read the trouble ticket\n3. Call get_topology to see the network devices\n4. Use run_command to investigate (show commands, ping)\n5. Form a hypothesis about what's broken\n6. Apply the fix using run_command (config commands)\n7. Call check_win_condition to verify the fix\n\nUse abbreviations like a real engineer: sh ip int bri, conf t, sw acc vlan, etc.` },
+      role: 'user' as const,
+      content: { type: 'text' as const, text: `You are a junior network engineer. Diagnose a scenario:\n\n1. Call list_scenarios and pick one\n2. Call load_scenario with its id\n3. Call get_ticket to read the trouble ticket\n4. Call get_topology to see the network devices\n5. Use run_command to investigate (show commands, ping)\n6. Form a hypothesis about what's broken\n7. Apply the fix using run_command (config commands)\n8. Call check_win_condition to verify the fix\n\nUse abbreviations like a real engineer: sh ip int bri, conf t, sw acc vlan, etc.` },
     }],
   })
 );
 
 server.prompt(
   'author-new-scenario',
-  { description: 'Guide for authoring a new scenario from scratch.', arguments: [{ name: 'domain', description: 'Domain: switching, routing, firewall, aws, linux, windows', required: false }] },
-  async ({ domain }) => ({
+  'Guide for authoring a new scenario from scratch.',
+  async (extra) => ({
     messages: [{
-      role: 'user',
-      content: { type: 'text', text: `Create a new diagnostic scenario${domain ? ` in the ${domain} domain` : ''}.\n\nThe scenario needs:\n- id: unique kebab-case\n- title: human-readable\n- difficulty: 1-5\n- topology: devices[] with interfaces, routing config; links[] between them\n- injected_fault: exactly ONE condition disabled (device, field, value)\n- ticket: title + symptom describing what the user sees (DON'T reveal the fix)\n- win_condition: a ping assertion {source, destination, expected: success}\n- reference_solution: minimal CLI commands that fix the fault\n\nDevice types: switch, router, firewall, host, ec2, vpc-router, linux-server, windows-server, docker-host\n\nThe fault must disable exactly one reachability condition:\n1. Source IP/mask/gateway\n2. Access VLAN path\n3. Trunk VLAN allowed\n4. L3 routing (enabled, SVI up, route exists)\n5. Firewall policy\n6. AWS (SG, NACL, route table)\n7. OS firewall (iptables, Windows Firewall)\n\nAfter writing the YAML, call validate_scenario to confirm it passes.` },
+      role: 'user' as const,
+      content: { type: 'text' as const, text: `Create a new diagnostic scenario.\n\nThe scenario needs:\n- id: unique kebab-case\n- title: human-readable\n- difficulty: 1-5\n- topology: devices[] with interfaces, routing config; links[] between them\n- injected_fault: exactly ONE condition disabled (device, field, value)\n- ticket: title + symptom describing what the user sees (DON'T reveal the fix)\n- win_condition: a ping assertion {source, destination, expected: success}\n- reference_solution: minimal CLI commands that fix the fault\n\nDevice types: switch, router, firewall, host, ec2, vpc-router, linux-server, windows-server, docker-host\n\nThe fault must disable exactly one reachability condition:\n1. Source IP/mask/gateway\n2. Access VLAN path\n3. Trunk VLAN allowed\n4. L3 routing (enabled, SVI up, route exists)\n5. Firewall policy\n6. AWS (SG, NACL, route table)\n7. OS firewall (iptables, Windows Firewall)\n\nAfter writing the YAML, call validate_scenario to confirm it passes.` },
     }],
   })
 );
