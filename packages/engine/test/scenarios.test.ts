@@ -1,7 +1,7 @@
 import { suite, test, assert, assertEqual } from './harness.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { loadScenario, checkWinCondition, parseScenarioJson } from '../src/scenario-loader.js';
+import { loadScenario, checkWinCondition, parseScenario } from '../src/scenario-loader.js';
 import { executeCommand } from '../src/cli-parser.js';
 import { evaluatePing } from '../src/reachability.js';
 import { Scenario, CommandContext } from '../src/types.js';
@@ -9,7 +9,7 @@ import { Scenario, CommandContext } from '../src/types.js';
 suite('scenarios');
 
 const scenariosDir = resolve(process.cwd(), 'scenarios');
-const files = readdirSync(scenariosDir).filter(f => f.endsWith('.json')).sort();
+const files = readdirSync(scenariosDir).filter(f => f.endsWith('.yaml')).sort();
 
 // Which ordered reachability condition each scenario's fault is expected to
 // break. Locks the fault→condition mapping so a regression in the evaluator
@@ -29,7 +29,7 @@ const EXPECTED_CONDITION: Record<string, number> = {
 };
 
 function loadScenarioFile(file: string): Scenario {
-  return parseScenarioJson(readFileSync(join(scenariosDir, file), 'utf-8'));
+  return parseScenario(readFileSync(join(scenariosDir, file), 'utf-8'));
 }
 
 function runReferenceSolution(scenario: Scenario, game: ReturnType<typeof loadScenario>): void {

@@ -13,7 +13,7 @@ import {
 import {
   loadScenario,
   checkWinCondition,
-  parseScenarioJson,
+  parseScenario,
 } from '@nrth/engine';
 import { executeCommand } from '@nrth/engine';
 
@@ -58,10 +58,10 @@ const availableScenarios: Map<string, Scenario> = new Map();
 // ===== Load Scenarios =====
 const scenariosDir = resolve(process.cwd(), 'scenarios');
 try {
-  const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.json'));
+  const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.yaml'));
   for (const file of files) {
     const content = readFileSync(join(scenariosDir, file), 'utf-8');
-    const scenario = parseScenarioJson(content);
+    const scenario = parseScenario(content);
     availableScenarios.set(scenario.id, scenario);
   }
   console.log(`Loaded ${availableScenarios.size} scenarios`);

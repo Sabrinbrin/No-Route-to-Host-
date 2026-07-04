@@ -12,7 +12,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Scenario, GameState, CommandContext } from '@nrth/engine';
-import { loadScenario, checkWinCondition, parseScenarioJson } from '@nrth/engine';
+import { loadScenario, checkWinCondition, parseScenario } from '@nrth/engine';
 import { executeCommand } from '@nrth/engine';
 
 type Verdict = 'PASS' | 'already-solved' | 'unsolvable' | 'symptom-mismatch' | 'unintended-solution';
@@ -126,7 +126,7 @@ function main(): void {
   const scenariosDir = findScenariosDir();
   let files: string[];
   try {
-    files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.json'));
+    files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.yaml'));
   } catch {
     console.error('Cannot find scenarios directory.');
     process.exit(1);
@@ -138,7 +138,7 @@ function main(): void {
   let allPassed = true;
   let passCount = 0;
   for (const file of files.sort()) {
-    const scenario = parseScenarioJson(readFileSync(join(scenariosDir, file), 'utf-8'));
+    const scenario = parseScenario(readFileSync(join(scenariosDir, file), 'utf-8'));
     const result = validateScenario(scenario);
     if (result.passed) {
       passCount++;

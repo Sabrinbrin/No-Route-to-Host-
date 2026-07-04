@@ -1,3 +1,4 @@
+import yaml from 'js-yaml';
 import {
   Scenario,
   NetworkState,
@@ -140,8 +141,14 @@ export function checkWinCondition(
 }
 
 /**
- * Parse a JSON scenario file.
+ * Parse a scenario file. Scenarios are authored as YAML (see design.md);
+ * YAML is a superset of JSON, so this also accepts JSON content.
  */
-export function parseScenarioJson(jsonContent: string): Scenario {
-  return JSON.parse(jsonContent) as Scenario;
+export function parseScenario(content: string): Scenario {
+  return yaml.load(content) as Scenario;
+}
+
+/** @deprecated Use parseScenario — kept as an alias for back-compat. */
+export function parseScenarioJson(content: string): Scenario {
+  return parseScenario(content);
 }

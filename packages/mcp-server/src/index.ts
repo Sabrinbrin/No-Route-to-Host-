@@ -19,7 +19,7 @@ import {
 import {
   loadScenario,
   checkWinCondition,
-  parseScenarioJson,
+  parseScenario,
 } from '@nrth/engine';
 import { executeCommand } from '@nrth/engine';
 
@@ -350,10 +350,10 @@ function handleRequest(request: JsonRpcRequest): JsonRpcResponse {
 function loadAllScenarios(): void {
   scenariosDir = resolve(process.cwd(), 'scenarios');
   try {
-    const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.json'));
+    const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.yaml'));
     for (const file of files) {
       const content = readFileSync(join(scenariosDir, file), 'utf-8');
-      const scenario = parseScenarioJson(content);
+      const scenario = parseScenario(content);
       availableScenarios.set(scenario.id, scenario);
     }
     console.error(`[MCP] Loaded ${availableScenarios.size} scenarios`);

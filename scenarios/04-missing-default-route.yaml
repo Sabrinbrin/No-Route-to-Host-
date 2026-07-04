@@ -1,0 +1,129 @@
+id: missing-default-route
+title: Missing Default Route
+difficulty: 3
+topology:
+  devices:
+    - id: host-internal
+      hostname: InternalPC
+      type: host
+      interfaces:
+        - name: eth0
+          ip: 192.168.1.10
+          mask: 255.255.255.0
+          gateway: 192.168.1.1
+          status: up
+      routing:
+        enabled: false
+        routes: []
+        svis: []
+    - id: core-router
+      hostname: CoreRTR
+      type: router
+      interfaces:
+        - name: Gi0/0
+          ip: 192.168.1.1
+          mask: 255.255.255.0
+          status: up
+        - name: Gi0/1
+          ip: 203.0.113.2
+          mask: 255.255.255.252
+          status: up
+      routing:
+        enabled: true
+        routes:
+          - network: 0.0.0.0
+            mask: 0.0.0.0
+            nextHop: 203.0.113.1
+        svis: []
+    - id: isp-router
+      hostname: ISP-RTR
+      type: router
+      interfaces:
+        - name: Gi0/0
+          ip: 203.0.113.1
+          mask: 255.255.255.252
+          status: up
+        - name: Gi0/1
+          ip: 8.8.8.1
+          mask: 255.255.255.0
+          status: up
+      routing:
+        enabled: true
+        routes:
+          - network: 192.168.1.0
+            mask: 255.255.255.0
+            nextHop: 203.0.113.2
+        svis: []
+    - id: external-host
+      hostname: ExtServer
+      type: host
+      interfaces:
+        - name: eth0
+          ip: 8.8.8.8
+          mask: 255.255.255.0
+          gateway: 8.8.8.1
+          status: up
+      routing:
+        enabled: false
+        routes: []
+        svis: []
+  links:
+    - id: link1
+      from:
+        device: host-internal
+        interface: eth0
+      to:
+        device: core-router
+        interface: Gi0/0
+    - id: link2
+      from:
+        device: core-router
+        interface: Gi0/1
+      to:
+        device: isp-router
+        interface: Gi0/0
+    - id: link3
+      from:
+        device: isp-router
+        interface: Gi0/1
+      to:
+        device: external-host
+        interface: eth0
+injected_fault:
+  device: core-router
+  field: routes
+  value:
+    network: 0.0.0.0
+    mask: 0.0.0.0
+  action: remove
+ticket:
+  title: Internal hosts can't reach the internet
+  symptom: >-
+    InternalPC (192.168.1.10) can reach CoreRTR (192.168.1.1) but cannot ping the external server at
+    8.8.8.8. Internal network connectivity is fine.
+  affected_hosts:
+    - host-internal
+win_condition:
+  type: ping
+  source: host-internal
+  destination: 8.8.8.8
+  expected: success
+reference_solution:
+  - device: core-router
+    commands:
+      - configure terminal
+      - ip route 0.0.0.0 0.0.0.0 203.0.113.1
+      - end
+layout:
+  host-internal:
+    x: 50
+    'y': 100
+  core-router:
+    x: 220
+    'y': 150
+  isp-router:
+    x: 400
+    'y': 150
+  external-host:
+    x: 570
+    'y': 100

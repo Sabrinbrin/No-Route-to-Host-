@@ -20,7 +20,7 @@ import {
 import {
   loadScenario,
   checkWinCondition,
-  parseScenarioJson,
+  parseScenario,
 } from '@nrth/engine';
 import { executeCommand } from '@nrth/engine';
 
@@ -77,11 +77,11 @@ interface ValidationResult {
 function validateScenarioFile(filePath: string): ValidationResult {
   const fileName = basename(filePath);
 
-  // Parse JSON
+  // Parse the scenario (YAML, superset of JSON)
   let data: any;
   try {
     const content = readFileSync(filePath, 'utf-8');
-    data = JSON.parse(content);
+    data = parseScenario(content);
   } catch (e: any) {
     return {
       file: fileName,
@@ -183,7 +183,7 @@ function watchMode(scenariosDir: string): void {
   const lastMtimes: Record<string, number> = {};
 
   // Initial scan
-  const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.json'));
+  const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.yaml'));
   for (const file of files) {
     const fullPath = join(scenariosDir, file);
     lastMtimes[file] = statSync(fullPath).mtimeMs;
@@ -193,7 +193,7 @@ function watchMode(scenariosDir: string): void {
   setInterval(() => {
     let currentFiles: string[];
     try {
-      currentFiles = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.json'));
+      currentFiles = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.yaml'));
     } catch {
       return;
     }
@@ -222,7 +222,7 @@ function watchMode(scenariosDir: string): void {
 // ===== Single-run validation (for CI / on-save trigger) =====
 
 function validateAll(scenariosDir: string): boolean {
-  const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.json'));
+  const files = readdirSync(scenariosDir).filter((f: string) => f.endsWith('.yaml'));
   console.log(`\n🔍 Validating ${files.length} scenarios...\n`);
 
   let allPassed = true;

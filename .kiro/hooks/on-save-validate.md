@@ -1,11 +1,11 @@
 ---
 trigger: on-save
-match: scenarios/**/*.json
+match: scenarios/**/*.yaml
 ---
 
 # On-Save: Validate Scenario
 
-When a scenario file (`scenarios/*.json`) is saved, automatically validate it
+When a scenario file (`scenarios/*.yaml`) is saved, automatically validate it
 by running the reference solution through the shared engine and checking the
 win condition.
 
