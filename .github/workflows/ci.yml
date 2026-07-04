@@ -40,8 +40,8 @@ jobs:
       - name: MCP server smoke test
         run: node scripts/smoke-mcp.mjs
 
-      - name: Lint check
-        run: npx tsc --noEmit -p packages/engine && npx tsc --noEmit -p packages/mcp-server && npx tsc --noEmit -p packages/validator && npx tsc --noEmit -p packages/hooks
+      - name: Lint (strict typecheck all packages)
+        run: npm run lint
 
       - name: Frontend builds for Pages
         run: |
