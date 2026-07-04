@@ -43,6 +43,16 @@ export function executeCommand(
   }
 }
 
+/**
+ * IOS-style command abbreviation matching.
+ * Returns true if `input` is a valid abbreviation of `full`.
+ */
+function abbr(input: string, full: string): boolean {
+  const i = input.toLowerCase();
+  const f = full.toLowerCase();
+  return f.startsWith(i) && i.length > 0;
+}
+
 
 // ===== EXEC MODE COMMANDS =====
 
@@ -53,23 +63,28 @@ function execModeCommand(
   keyword: string,
   context: CommandContext
 ): CommandResult {
-  switch (keyword) {
-    case 'show':
-      return handleShow(state, device, parts.slice(1));
-    case 'ping':
-      return handlePing(state, device, parts[1]);
-    case 'configure':
-    case 'conf':
-      if (parts[1]?.toLowerCase() === 'terminal' || parts[1]?.toLowerCase() === 't') {
-        context.mode = 'config';
-        return { output: `${device.hostname}(config)#`, stateChanged: false };
-      }
-      return { output: '% Invalid input. Use: configure terminal', stateChanged: false };
-    case 'connect':
-      return { output: '% Use the device selector to change devices.', stateChanged: false };
-    default:
-      return unknownCommand(context.mode);
+  if (abbr(keyword, 'show')) {
+    return handleShow(state, device, parts.slice(1));
   }
+  if (abbr(keyword, 'ping')) {
+    return handlePing(state, device, parts[1]);
+  }
+  if (abbr(keyword, 'configure')) {
+    const arg = parts[1]?.toLowerCase() || '';
+    if (!arg || abbr(arg, 'terminal')) {
+      context.mode = 'config';
+      return { output: `${device.hostname}(config)#`, stateChanged: false };
+    }
+    return { output: '% Invalid input. Use: configure terminal', stateChanged: false };
+  }
+  if (keyword === 'enable' || keyword === 'en') {
+    // Already in exec/enable mode, just acknowledge
+    return { output: `${device.hostname}#`, stateChanged: false };
+  }
+  if (keyword === 'connect') {
+    return { output: '% Use the device selector to change devices.', stateChanged: false };
+  }
+  return unknownCommand(context.mode);
 }
 
 
@@ -82,57 +97,61 @@ function configModeCommand(
   keyword: string,
   context: CommandContext
 ): CommandResult {
-  switch (keyword) {
-    case 'interface': {
-      const ifName = parts.slice(1).join(' ');
-      const iface = findInterface(device, ifName);
-      if (!iface) {
-        // Maybe it's an SVI - create it
-        if (ifName.toLowerCase().startsWith('vlan')) {
-          context.mode = 'config-if';
-          context.currentInterface = ifName;
-          return { output: `${device.hostname}(config-if)#`, stateChanged: false };
-        }
-        return { output: `% Interface '${ifName}' not found.`, stateChanged: false };
+  if (abbr(keyword, 'interface')) {
+    const ifName = parts.slice(1).join(' ');
+    const iface = findInterface(device, ifName);
+    if (!iface) {
+      // Maybe it's an SVI - create it
+      if (ifName.toLowerCase().startsWith('vlan')) {
+        context.mode = 'config-if';
+        context.currentInterface = ifName;
+        return { output: `${device.hostname}(config-if)#`, stateChanged: false };
       }
-      context.mode = 'config-if';
-      context.currentInterface = iface.name;
-      return { output: `${device.hostname}(config-if)#`, stateChanged: false };
+      return { output: `% Interface '${ifName}' not found.`, stateChanged: false };
     }
-    case 'ip': {
-      if (parts[1]?.toLowerCase() === 'routing') {
-        device.routing.enabled = true;
-        return { output: '% IP routing enabled.', stateChanged: true };
-      }
-      if (parts[1]?.toLowerCase() === 'route') {
-        return handleIpRoute(device, parts.slice(2));
-      }
-      return { output: '% Invalid ip command. Use: ip routing | ip route <net> <mask> <nh>', stateChanged: false };
-    }
-    case 'no': {
-      if (parts[1]?.toLowerCase() === 'ip' && parts[2]?.toLowerCase() === 'routing') {
-        device.routing.enabled = false;
-        return { output: '% IP routing disabled.', stateChanged: true };
-      }
-      return { output: '% Invalid no command.', stateChanged: false };
-    }
-    case 'set': {
-      if (parts[1]?.toLowerCase() === 'firewall' && parts[2]?.toLowerCase() === 'policy') {
-        return handleSetFirewallPolicy(device, parts.slice(3));
-      }
-      return { output: '% Invalid set command.', stateChanged: false };
-    }
-    case 'end':
-      context.mode = 'exec';
-      context.currentInterface = undefined;
-      return { output: `${device.hostname}#`, stateChanged: false };
-    case 'exit':
-      context.mode = 'exec';
-      context.currentInterface = undefined;
-      return { output: `${device.hostname}#`, stateChanged: false };
-    default:
-      return unknownCommand(context.mode);
+    context.mode = 'config-if';
+    context.currentInterface = iface.name;
+    return { output: `${device.hostname}(config-if)#`, stateChanged: false };
   }
+  if (keyword === 'ip') {
+    const sub = parts[1]?.toLowerCase() || '';
+    if (abbr(sub, 'routing')) {
+      device.routing.enabled = true;
+      return { output: '% IP routing enabled.', stateChanged: true };
+    }
+    if (abbr(sub, 'route')) {
+      return handleIpRoute(device, parts.slice(2));
+    }
+    return { output: '% Invalid ip command. Use: ip routing | ip route <net> <mask> <nh>', stateChanged: false };
+  }
+  if (keyword === 'no') {
+    if (abbr(parts[1]?.toLowerCase() || '', 'ip') && abbr(parts[2]?.toLowerCase() || '', 'routing')) {
+      device.routing.enabled = false;
+      return { output: '% IP routing disabled.', stateChanged: true };
+    }
+    if (abbr(parts[1]?.toLowerCase() || '', 'shutdown')) {
+      // "no shut" in config mode without interface selected — ignore gracefully
+      return { output: '% Select an interface first.', stateChanged: false };
+    }
+    return { output: '% Invalid no command.', stateChanged: false };
+  }
+  if (keyword === 'set') {
+    if (abbr(parts[1]?.toLowerCase() || '', 'firewall') && abbr(parts[2]?.toLowerCase() || '', 'policy')) {
+      return handleSetFirewallPolicy(device, parts.slice(3));
+    }
+    return { output: '% Invalid set command.', stateChanged: false };
+  }
+  if (keyword === 'end') {
+    context.mode = 'exec';
+    context.currentInterface = undefined;
+    return { output: `${device.hostname}#`, stateChanged: false };
+  }
+  if (abbr(keyword, 'exit')) {
+    context.mode = 'exec';
+    context.currentInterface = undefined;
+    return { output: `${device.hostname}#`, stateChanged: false };
+  }
+  return unknownCommand(context.mode);
 }
 
 
@@ -153,105 +172,106 @@ function configIfModeCommand(
 
   const iface = findInterface(device, ifName);
 
-  switch (keyword) {
-    case 'switchport': {
+  if (abbr(keyword, 'switchport')) {
+    if (!iface) return { output: `% Interface ${ifName} not found.`, stateChanged: false };
+    return handleSwitchport(iface, parts.slice(1));
+  }
+  if (keyword === 'ip') {
+    if (abbr(parts[1]?.toLowerCase() || '', 'address')) {
       if (!iface) return { output: `% Interface ${ifName} not found.`, stateChanged: false };
-      return handleSwitchport(iface, parts.slice(1));
+      const ip = parts[2];
+      const mask = parts[3];
+      if (!ip || !mask) return { output: '% Usage: ip address <ip> <mask>', stateChanged: false };
+      iface.ip = ip;
+      iface.mask = mask;
+      return { output: `% IP address set to ${ip} ${mask}`, stateChanged: true };
     }
-    case 'ip': {
-      if (parts[1]?.toLowerCase() === 'address') {
-        if (!iface) return { output: `% Interface ${ifName} not found.`, stateChanged: false };
-        const ip = parts[2];
-        const mask = parts[3];
-        if (!ip || !mask) return { output: '% Usage: ip address <ip> <mask>', stateChanged: false };
-        iface.ip = ip;
-        iface.mask = mask;
-        return { output: `% IP address set to ${ip} ${mask}`, stateChanged: true };
-      }
-      return { output: '% Invalid ip command in interface mode.', stateChanged: false };
-    }
-    case 'no': {
-      if (!iface && ifName.toLowerCase().startsWith('vlan')) {
-        // SVI no shutdown
-        if (parts[1]?.toLowerCase() === 'shutdown') {
-          const vlanNum = parseInt(ifName.replace(/[^0-9]/g, ''));
-          const svi = device.routing.svis.find(s => s.vlan === vlanNum);
-          if (svi) {
-            svi.status = 'up';
-            return { output: `% Interface ${ifName} enabled.`, stateChanged: true };
-          }
-          return { output: `% SVI VLAN ${vlanNum} not found.`, stateChanged: false };
-        }
-      }
-      if (parts[1]?.toLowerCase() === 'shutdown') {
-        if (!iface) return { output: `% Interface ${ifName} not found.`, stateChanged: false };
-        iface.status = 'up';
-        return { output: `% Interface ${ifName} enabled.`, stateChanged: true };
-      }
-      return { output: '% Invalid no command.', stateChanged: false };
-    }
-    case 'shutdown': {
+    return { output: '% Invalid ip command in interface mode.', stateChanged: false };
+  }
+  if (keyword === 'no') {
+    if (abbr(parts[1]?.toLowerCase() || '', 'shutdown')) {
       if (!iface && ifName.toLowerCase().startsWith('vlan')) {
         const vlanNum = parseInt(ifName.replace(/[^0-9]/g, ''));
         const svi = device.routing.svis.find(s => s.vlan === vlanNum);
         if (svi) {
-          svi.status = 'down';
-          return { output: `% Interface ${ifName} disabled.`, stateChanged: true };
+          svi.status = 'up';
+          return { output: `% Interface ${ifName} enabled.`, stateChanged: true };
         }
+        return { output: `% SVI VLAN ${vlanNum} not found.`, stateChanged: false };
       }
       if (!iface) return { output: `% Interface ${ifName} not found.`, stateChanged: false };
-      iface.status = 'down';
-      return { output: `% Interface ${ifName} disabled.`, stateChanged: true };
+      iface.status = 'up';
+      return { output: `% Interface ${ifName} enabled.`, stateChanged: true };
     }
-    case 'end':
-      context.mode = 'exec';
-      context.currentInterface = undefined;
-      return { output: `${device.hostname}#`, stateChanged: false };
-    case 'exit':
-      context.mode = 'config';
-      context.currentInterface = undefined;
-      return { output: `${device.hostname}(config)#`, stateChanged: false };
-    default:
-      return unknownCommand(context.mode);
+    return { output: '% Invalid no command.', stateChanged: false };
   }
+  if (abbr(keyword, 'shutdown')) {
+    if (!iface && ifName.toLowerCase().startsWith('vlan')) {
+      const vlanNum = parseInt(ifName.replace(/[^0-9]/g, ''));
+      const svi = device.routing.svis.find(s => s.vlan === vlanNum);
+      if (svi) {
+        svi.status = 'down';
+        return { output: `% Interface ${ifName} disabled.`, stateChanged: true };
+      }
+    }
+    if (!iface) return { output: `% Interface ${ifName} not found.`, stateChanged: false };
+    iface.status = 'down';
+    return { output: `% Interface ${ifName} disabled.`, stateChanged: true };
+  }
+  if (keyword === 'end') {
+    context.mode = 'exec';
+    context.currentInterface = undefined;
+    return { output: `${device.hostname}#`, stateChanged: false };
+  }
+  if (abbr(keyword, 'exit')) {
+    context.mode = 'config';
+    context.currentInterface = undefined;
+    return { output: `${device.hostname}(config)#`, stateChanged: false };
+  }
+  return unknownCommand(context.mode);
 }
 
 
 // ===== SHOW COMMANDS =====
 
 function handleShow(state: NetworkState, device: Device, args: string[]): CommandResult {
-  const sub = args[0]?.toLowerCase();
+  const sub = args[0]?.toLowerCase() || '';
 
-  switch (sub) {
-    case 'interfaces':
-    case 'int':
-      return { output: formatInterfaces(device), stateChanged: false };
-    case 'ip':
-      if (args[1]?.toLowerCase() === 'route') {
-        return { output: formatRoutes(device), stateChanged: false };
-      }
-      if (args[1]?.toLowerCase() === 'int' || args[1]?.toLowerCase() === 'interface') {
-        if (args[2]?.toLowerCase() === 'brief') {
-          return { output: formatIntBrief(device), stateChanged: false };
-        }
-      }
-      return { output: '% Usage: show ip route | show ip int brief', stateChanged: false };
-    case 'vlan':
-      if (args[1]?.toLowerCase() === 'brief') {
-        return { output: formatVlanBrief(device), stateChanged: false };
-      }
-      return { output: formatVlanBrief(device), stateChanged: false };
-    case 'running-config':
-    case 'run':
-      return { output: formatRunningConfig(device), stateChanged: false };
-    case 'firewall':
-      return { output: formatFirewallPolicies(device), stateChanged: false };
-    default:
-      return {
-        output: `% Available show commands:\n  show interfaces\n  show ip route\n  show ip int brief\n  show vlan brief\n  show running-config\n  show firewall`,
-        stateChanged: false,
-      };
+  if (abbr(sub, 'interfaces')) {
+    return { output: formatInterfaces(device), stateChanged: false };
   }
+  if (abbr(sub, 'ip')) {
+    const sub2 = args[1]?.toLowerCase() || '';
+    if (abbr(sub2, 'route')) {
+      return { output: formatRoutes(device), stateChanged: false };
+    }
+    if (abbr(sub2, 'interface') || abbr(sub2, 'int')) {
+      const sub3 = args[2]?.toLowerCase() || '';
+      if (!sub3 || abbr(sub3, 'brief')) {
+        return { output: formatIntBrief(device), stateChanged: false };
+      }
+    }
+    return { output: '% Usage: show ip route | show ip int brief', stateChanged: false };
+  }
+  if (abbr(sub, 'vlan')) {
+    return { output: formatVlanBrief(device), stateChanged: false };
+  }
+  if (abbr(sub, 'running-config') || sub === 'run') {
+    return { output: formatRunningConfig(device), stateChanged: false };
+  }
+  if (abbr(sub, 'firewall')) {
+    return { output: formatFirewallPolicies(device), stateChanged: false };
+  }
+  if (!sub) {
+    return {
+      output: `% Available show commands:\n  show interfaces\n  show ip route\n  show ip int brief\n  show vlan brief\n  show running-config\n  show firewall`,
+      stateChanged: false,
+    };
+  }
+  return {
+    output: `% Available show commands:\n  show interfaces\n  show ip route\n  show ip int brief\n  show vlan brief\n  show running-config\n  show firewall`,
+    stateChanged: false,
+  };
 }
 
 
@@ -427,9 +447,9 @@ function handlePing(state: NetworkState, device: Device, target: string | undefi
 // ===== SWITCHPORT HANDLER =====
 
 function handleSwitchport(iface: NetworkInterface, args: string[]): CommandResult {
-  const sub = args[0]?.toLowerCase();
-  if (sub === 'access') {
-    if (args[1]?.toLowerCase() === 'vlan') {
+  const sub = args[0]?.toLowerCase() || '';
+  if (abbr(sub, 'access')) {
+    if (abbr(args[1]?.toLowerCase() || '', 'vlan')) {
       const vlanId = parseInt(args[2]);
       if (isNaN(vlanId) || vlanId < 1 || vlanId > 4094) {
         return { output: '% Invalid VLAN ID. Use 1-4094.', stateChanged: false };
@@ -440,22 +460,22 @@ function handleSwitchport(iface: NetworkInterface, args: string[]): CommandResul
     }
     return { output: '% Usage: switchport access vlan <id>', stateChanged: false };
   }
-  if (sub === 'mode') {
-    const mode = args[1]?.toLowerCase();
-    if (mode === 'access') {
+  if (abbr(sub, 'mode')) {
+    const mode = args[1]?.toLowerCase() || '';
+    if (abbr(mode, 'access')) {
       iface.mode = 'access';
       return { output: '% Port mode set to access.', stateChanged: true };
     }
-    if (mode === 'trunk') {
+    if (abbr(mode, 'trunk')) {
       iface.mode = 'trunk';
       return { output: '% Port mode set to trunk.', stateChanged: true };
     }
     return { output: '% Usage: switchport mode access|trunk', stateChanged: false };
   }
-  if (sub === 'trunk') {
-    if (args[1]?.toLowerCase() === 'allowed' && args[2]?.toLowerCase() === 'vlan') {
-      const action = args[3]?.toLowerCase();
-      if (action === 'add') {
+  if (abbr(sub, 'trunk')) {
+    if (abbr(args[1]?.toLowerCase() || '', 'allowed') && abbr(args[2]?.toLowerCase() || '', 'vlan')) {
+      const action = args[3]?.toLowerCase() || '';
+      if (abbr(action, 'add')) {
         const vlanId = parseInt(args[4]);
         if (isNaN(vlanId)) return { output: '% Invalid VLAN ID.', stateChanged: false };
         if (!iface.trunkAllowedVlans) iface.trunkAllowedVlans = [];
@@ -465,7 +485,7 @@ function handleSwitchport(iface: NetworkInterface, args: string[]): CommandResul
         }
         return { output: `% VLAN ${vlanId} added to trunk allowed list.`, stateChanged: true };
       }
-      if (action === 'remove') {
+      if (abbr(action, 'remove')) {
         const vlanId = parseInt(args[4]);
         if (isNaN(vlanId)) return { output: '% Invalid VLAN ID.', stateChanged: false };
         if (iface.trunkAllowedVlans) {
@@ -473,8 +493,8 @@ function handleSwitchport(iface: NetworkInterface, args: string[]): CommandResul
         }
         return { output: `% VLAN ${vlanId} removed from trunk allowed list.`, stateChanged: true };
       }
-      // Direct set
-      const vlanId = parseInt(action || '');
+      // Direct set (number as action)
+      const vlanId = parseInt(action);
       if (!isNaN(vlanId)) {
         if (!iface.trunkAllowedVlans) iface.trunkAllowedVlans = [];
         if (!iface.trunkAllowedVlans.includes(vlanId)) {
