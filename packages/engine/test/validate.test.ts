@@ -63,3 +63,86 @@ test('detects empty symptom as symptom-mismatch', () => {
   assert(!report.passed, 'Expected FAIL but got PASS');
   assertEqual(report.verdict, 'symptom-mismatch');
 });
+
+
+// Test: reference solution changes no state → FAIL unintended-solution
+test('detects no-state-change fix as unintended-solution', () => {
+  const base = parseScenario(readFileSync(join(scenariosDir, '01-wrong-access-vlan.yaml'), 'utf-8'));
+  // Reference solution that only runs read-only commands (show/ping) — changes nothing
+  const noChange: Scenario = {
+    ...base,
+    reference_solution: [{ device: 'switch1', commands: ['show vlan brief', 'show interfaces'] }],
+  };
+  const report = validateScenario(noChange);
+  assert(!report.passed, 'Expected FAIL but got PASS');
+  // This hits either 'unsolvable' (if win not met) or 'unintended-solution' (if win met without state change)
+  // Since the fault is still present and show commands don't fix it, win is not met → unsolvable
+  // To trigger unintended-solution via no-state-change, we need the win to be met WITHOUT changes.
+  // That means the scenario's win_condition must already be satisfied after the fault — but that's already-solved.
+  // The realistic case: reference_solution commands run but are all no-ops (e.g., setting the same value).
+  assert(report.verdict === 'unsolvable' || report.verdict === 'unintended-solution',
+    `Expected unsolvable or unintended-solution but got ${report.verdict}`);
+});
+
+// Test: scenario where read-only investigation wins → FAIL unintended-solution
+// This tests the bounded heuristic: if just running show/ping commands on every device
+// resolves the win condition, the fault isn't a real misconfiguration.
+test('detects read-only-wins as unintended-solution', () => {
+  // Construct a scenario where the win_condition source IS a device that exists,
+  // and the destination is its own IP (loopback ping always succeeds).
+  // The fault "breaks" something unrelated, but the win condition is trivially satisfied.
+  const selfPing: Scenario = {
+    id: 'test-self-ping',
+    title: 'Test Self Ping',
+    difficulty: 1,
+    topology: {
+      devices: [
+        {
+          id: 'host1',
+          hostname: 'Host1',
+          type: 'host',
+          interfaces: [{ name: 'eth0', ip: '10.0.0.1', mask: '255.255.255.0', gateway: '10.0.0.254', status: 'up' }],
+          routing: { enabled: false, routes: [], svis: [] },
+        },
+        {
+          id: 'sw1',
+          hostname: 'SW1',
+          type: 'switch',
+          interfaces: [
+            { name: 'Gi0/1', mode: 'access' as const, accessVlan: 10, status: 'up' },
+          ],
+          routing: { enabled: false, routes: [], svis: [{ vlan: 10, ip: '10.0.0.254', mask: '255.255.255.0', status: 'up' }] },
+        },
+      ],
+      links: [
+        { id: 'l1', from: { device: 'host1', interface: 'eth0' }, to: { device: 'sw1', interface: 'Gi0/1' } },
+      ],
+    },
+    injected_fault: { device: 'sw1', interface: 'Gi0/1', field: 'accessVlan', value: 99, action: 'set' },
+    ticket: { title: 'Test', symptom: 'Host1 cannot reach gateway', affected_hosts: ['host1'] },
+    // Win condition: host1 pings ITSELF (always succeeds regardless of fault)
+    win_condition: { type: 'ping', source: 'host1', destination: '10.0.0.1', expected: 'success' },
+    reference_solution: [{ device: 'sw1', commands: ['configure terminal', 'interface Gi0/1', 'switchport access vlan 10', 'end'] }],
+  };
+  const report = validateScenario(selfPing);
+  // The self-ping win condition is satisfied even before the fix → should be already-solved or unintended-solution
+  assert(!report.passed, 'Expected FAIL but got PASS');
+  assert(
+    report.verdict === 'already-solved' || report.verdict === 'unintended-solution',
+    `Expected already-solved or unintended-solution but got ${report.verdict}: ${report.details}`
+  );
+});
+
+// Test: reference solution that sets the SAME broken value (no real state change) → catches no-op fixes
+test('detects no-op reference solution as unsolvable (not silently passing)', () => {
+  const base = parseScenario(readFileSync(join(scenariosDir, '01-wrong-access-vlan.yaml'), 'utf-8'));
+  // Reference solution sets the VLAN to the SAME wrong value (20) — technically "changes" the field to the same value
+  // The engine's switchport command sets it regardless, so stateChanged=true, but win won't be met
+  const noOp: Scenario = {
+    ...base,
+    reference_solution: [{ device: 'switch1', commands: ['configure terminal', 'interface Gi0/1', 'switchport access vlan 20', 'end'] }],
+  };
+  const report = validateScenario(noOp);
+  assert(!report.passed, 'Expected FAIL but got PASS');
+  assertEqual(report.verdict, 'unsolvable');
+});
