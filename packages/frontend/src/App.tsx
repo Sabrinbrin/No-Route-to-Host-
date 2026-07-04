@@ -89,6 +89,9 @@ export function App() {
         )}
       </div>
 
+      <footer style={{ padding: "16px 22px", textAlign: "center", fontSize: 12, color: "#8b949e", borderTop: "1px solid var(--border)" }}>
+        Built by <a href="https://github.com/Sabrinbrin" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>@Sabrinbrin</a> with Kiro
+      </footer>
 
       {solved && session && (
         <Debrief
@@ -181,10 +184,6 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ textAlign: 'center', padding: '20px 0 40px', fontSize: 12.5, color: '#8B949E' }}>
-        Built by <a href="https://github.com/Sabrinbrin" target="_blank" rel="noopener noreferrer" style={{ color: '#7C3AED', textDecoration: 'none', fontWeight: 500 }}>@Sabrinbrin</a> with Kiro
-      </div>
     </div>
   );
 }
