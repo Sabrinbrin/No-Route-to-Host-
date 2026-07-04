@@ -8,14 +8,16 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b",
-    "typecheck": "tsc -b",
+    "build": "tsc -b && npm run build -w @nrth/frontend",
+    "build:engine": "tsc -b",
+    "typecheck": "tsc -b && tsc --noEmit -p packages/frontend",
+    "dev": "npm run dev -w @nrth/frontend",
+    "preview": "npm run preview -w @nrth/frontend",
     "test": "tsc -b && node packages/engine/dist/test/index.js",
     "validate": "tsc -b && node packages/validator/dist/index.js",
     "validate:hook": "node packages/hooks/dist/index.js",
     "watch:scenarios": "node packages/hooks/dist/index.js --watch",
-    "mcp": "node packages/mcp-server/dist/index.js",
-    "start": "node packages/server/dist/index.js"
+    "mcp": "node packages/mcp-server/dist/index.js"
   },
   "engines": {
     "node": ">=18"

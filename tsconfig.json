@@ -4,7 +4,6 @@
     { "path": "packages/engine" },
     { "path": "packages/mcp-server" },
     { "path": "packages/validator" },
-    { "path": "packages/hooks" },
-    { "path": "packages/server" }
+    { "path": "packages/hooks" }
   ]
 }
