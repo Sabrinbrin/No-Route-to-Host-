@@ -65,6 +65,7 @@ declare var process: {
   stdin: any;
   stdout: any;
   env: Record<string, string | undefined>;
+  uptime(): number;
 };
 
 declare var Buffer: {
