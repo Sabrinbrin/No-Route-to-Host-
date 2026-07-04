@@ -10,25 +10,65 @@ The twist: **Kiro plays every scenario first** — driving the simulation throug
 
 ## 30-Second Demo
 
+<p align="center">
+  <img src="docs/demo-gameplay.gif" alt="Gameplay: diagnose wrong VLAN, fix, ticket resolved" width="720" />
+</p>
+
+> **Play loop:** Pick up a ticket → investigate with `show vlan brief` → spot the wrong VLAN → fix with `sw acc vlan 10` → link goes green → ticket resolved.
+
+---
+
+## Demo Evidence: Kiro Validates via MCP
+
+### On-save hook: break a scenario → instant FAIL
+
+```bash
+$ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
+  ✓ Wrong Access VLAN (wrong-access-vlan) — Solvable in 4 steps.
+
+# Now break the reference solution (change vlan 10 → vlan 99):
+$ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
+  ✗ Wrong Access VLAN (wrong-access-vlan) — FAIL unsolvable: Win not met after reference solution
+
+# Fix it back:
+$ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
+  ✓ Wrong Access VLAN (wrong-access-vlan) — Solvable in 4 steps.
 ```
-SW1# sh vlan brief
-VLAN  Name       Status  Ports
-───────────────────────────────────────────────────────
-10    VLAN10     active  Gi0/2
-20    VLAN20     active  Gi0/1    ← Host A is here? Wrong VLAN!
 
-SW1# conf t
-SW1(config)# int Gi0/1
-SW1(config-if)# sw acc vlan 10
-% Access VLAN set to 10.
-SW1(config-if)# end
-SW1# ping 10.0.10.1
-!!!!!  Success rate is 100 percent (5/5)
+<p align="center">
+  <img src="docs/demo-onsave-hook.gif" alt="On-save hook: break scenario → FAIL, fix → PASS" width="720" />
+</p>
 
-✓ Ticket resolved. Grade: A. Time: 47s.
+### MCP agent plays the game (validate_scenario tool)
+
+```bash
+$ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"validate_scenario","arguments":{"id":"wrong-access-vlan"}}}
+' | node packages/mcp-server/dist/index.js 2>/dev/null
+
+# Response:
+{
+  "scenarioId": "wrong-access-vlan",
+  "passed": true,
+  "verdict": "PASS",
+  "steps": 4,
+  "details": "Solvable in 4 steps, fair."
+}
 ```
 
-Then open a scenario file, break the reference solution, save — the on-save hook fires, the agent reports "FAIL: unsolvable." Fix it, save, "PASS: solvable in 4 steps."
+<p align="center">
+  <img src="docs/demo-mcp-validate.gif" alt="MCP server: agent calls validate_scenario tool" width="720" />
+</p>
+
+> **How to record these GIFs yourself:**
+> ```bash
+> # Install asciinema + agg (or use ttyrec/terminalizer)
+> asciinema rec demo.cast
+> # Run the commands above
+> # Ctrl+D to stop, then convert:
+> agg demo.cast demo.gif
+> ```
+> Place GIFs in `docs/` and they'll render in the README.
 
 ---
 
