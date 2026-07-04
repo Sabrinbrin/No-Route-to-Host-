@@ -1,0 +1,118 @@
+{
+  "id": "wrong-access-vlan",
+  "title": "Wrong Access VLAN",
+  "difficulty": 1,
+  "topology": {
+    "devices": [
+      {
+        "id": "host-a",
+        "hostname": "HostA",
+        "type": "host",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.10.2",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.10.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] }
+      },
+      {
+        "id": "switch1",
+        "hostname": "SW1",
+        "type": "switch",
+        "interfaces": [
+          {
+            "name": "Gi0/1",
+            "mode": "access",
+            "accessVlan": 10,
+            "status": "up"
+          },
+          {
+            "name": "Gi0/2",
+            "mode": "access",
+            "accessVlan": 10,
+            "status": "up"
+          },
+          {
+            "name": "Gi0/24",
+            "mode": "trunk",
+            "trunkAllowedVlans": [10, 20],
+            "status": "up"
+          }
+        ],
+        "routing": {
+          "enabled": true,
+          "routes": [],
+          "svis": [
+            { "vlan": 10, "ip": "10.0.10.1", "mask": "255.255.255.0", "status": "up" },
+            { "vlan": 20, "ip": "10.0.20.1", "mask": "255.255.255.0", "status": "up" }
+          ]
+        }
+      },
+      {
+        "id": "host-b",
+        "hostname": "HostB",
+        "type": "host",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.10.3",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.10.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] }
+      }
+    ],
+    "links": [
+      {
+        "id": "link1",
+        "from": { "device": "host-a", "interface": "eth0" },
+        "to": { "device": "switch1", "interface": "Gi0/1" }
+      },
+      {
+        "id": "link2",
+        "from": { "device": "host-b", "interface": "eth0" },
+        "to": { "device": "switch1", "interface": "Gi0/2" }
+      }
+    ]
+  },
+  "injected_fault": {
+    "device": "switch1",
+    "interface": "Gi0/1",
+    "field": "accessVlan",
+    "value": 20,
+    "action": "set"
+  },
+  "ticket": {
+    "title": "Host A can't reach its default gateway",
+    "symptom": "Host A reports 'destination unreachable' when pinging 10.0.10.1 (its default gateway). Host B on the same switch works fine.",
+    "affected_hosts": ["host-a"]
+  },
+  "win_condition": {
+    "type": "ping",
+    "source": "host-a",
+    "destination": "10.0.10.1",
+    "expected": "success"
+  },
+  "reference_solution": [
+    {
+      "device": "switch1",
+      "commands": [
+        "configure terminal",
+        "interface Gi0/1",
+        "switchport access vlan 10",
+        "end"
+      ]
+    }
+  ],
+  "layout": {
+    "host-a": { "x": 100, "y": 50 },
+    "switch1": { "x": 300, "y": 150 },
+    "host-b": { "x": 500, "y": 50 }
+  }
+}

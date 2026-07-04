@@ -1,0 +1,141 @@
+{
+  "id": "trunk-allowed-list",
+  "title": "Trunk Allowed-List Gap",
+  "difficulty": 2,
+  "topology": {
+    "devices": [
+      {
+        "id": "host-c",
+        "hostname": "HostC",
+        "type": "host",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.30.2",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.30.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] }
+      },
+      {
+        "id": "switch-a",
+        "hostname": "SWA",
+        "type": "switch",
+        "interfaces": [
+          {
+            "name": "Gi0/1",
+            "mode": "access",
+            "accessVlan": 30,
+            "status": "up"
+          },
+          {
+            "name": "Gi0/24",
+            "mode": "trunk",
+            "trunkAllowedVlans": [10, 20, 30],
+            "status": "up"
+          }
+        ],
+        "routing": {
+          "enabled": false,
+          "routes": [],
+          "svis": []
+        }
+      },
+      {
+        "id": "switch-b",
+        "hostname": "SWB",
+        "type": "switch",
+        "interfaces": [
+          {
+            "name": "Gi0/1",
+            "mode": "access",
+            "accessVlan": 30,
+            "status": "up"
+          },
+          {
+            "name": "Gi0/24",
+            "mode": "trunk",
+            "trunkAllowedVlans": [10, 20, 30],
+            "status": "up"
+          }
+        ],
+        "routing": {
+          "enabled": true,
+          "routes": [],
+          "svis": [
+            { "vlan": 30, "ip": "10.0.30.1", "mask": "255.255.255.0", "status": "up" }
+          ]
+        }
+      },
+      {
+        "id": "host-d",
+        "hostname": "HostD",
+        "type": "host",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.30.3",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.30.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] }
+      }
+    ],
+    "links": [
+      {
+        "id": "link1",
+        "from": { "device": "host-c", "interface": "eth0" },
+        "to": { "device": "switch-a", "interface": "Gi0/1" }
+      },
+      {
+        "id": "link2",
+        "from": { "device": "switch-a", "interface": "Gi0/24" },
+        "to": { "device": "switch-b", "interface": "Gi0/24" }
+      },
+      {
+        "id": "link3",
+        "from": { "device": "host-d", "interface": "eth0" },
+        "to": { "device": "switch-b", "interface": "Gi0/1" }
+      }
+    ]
+  },
+  "injected_fault": {
+    "device": "switch-a",
+    "interface": "Gi0/24",
+    "field": "trunkAllowedVlans",
+    "value": [10, 20],
+    "action": "set"
+  },
+  "ticket": {
+    "title": "VLAN 30 hosts on Switch A can't reach VLAN 30 on Switch B",
+    "symptom": "Host C (10.0.30.2) on SWA cannot ping Host D (10.0.30.3) on SWB. Both are in VLAN 30. Other VLANs work fine across the trunk.",
+    "affected_hosts": ["host-c"]
+  },
+  "win_condition": {
+    "type": "ping",
+    "source": "host-c",
+    "destination": "10.0.30.3",
+    "expected": "success"
+  },
+  "reference_solution": [
+    {
+      "device": "switch-a",
+      "commands": [
+        "configure terminal",
+        "interface Gi0/24",
+        "switchport trunk allowed vlan add 30",
+        "end"
+      ]
+    }
+  ],
+  "layout": {
+    "host-c": { "x": 80, "y": 50 },
+    "switch-a": { "x": 200, "y": 150 },
+    "switch-b": { "x": 400, "y": 150 },
+    "host-d": { "x": 520, "y": 50 }
+  }
+}

@@ -1,55 +1,28 @@
-# Prerequisites
-*.d
+# Dependencies
+node_modules/
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# Build output
+dist/
+*.tsbuildinfo
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# IDE
+.vscode/
+.idea/
 
-# Precompiled Headers
-*.gch
-*.pch
+# OS
+.DS_Store
+Thumbs.db
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# Environment
+.env
+.env.local
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+# Logs
+*.log
+npm-debug.log*
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+# Test coverage
+coverage/
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo
+# Vite
+packages/frontend/dist/

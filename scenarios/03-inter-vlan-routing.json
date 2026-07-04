@@ -1,0 +1,111 @@
+{
+  "id": "inter-vlan-routing",
+  "title": "Inter-VLAN Routing Down",
+  "difficulty": 2,
+  "topology": {
+    "devices": [
+      {
+        "id": "host-v10",
+        "hostname": "HostV10",
+        "type": "host",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.10.10",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.10.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] }
+      },
+      {
+        "id": "l3switch",
+        "hostname": "L3SW",
+        "type": "switch",
+        "interfaces": [
+          {
+            "name": "Gi0/1",
+            "mode": "access",
+            "accessVlan": 10,
+            "status": "up"
+          },
+          {
+            "name": "Gi0/2",
+            "mode": "access",
+            "accessVlan": 20,
+            "status": "up"
+          }
+        ],
+        "routing": {
+          "enabled": true,
+          "routes": [],
+          "svis": [
+            { "vlan": 10, "ip": "10.0.10.1", "mask": "255.255.255.0", "status": "up" },
+            { "vlan": 20, "ip": "10.0.20.1", "mask": "255.255.255.0", "status": "up" }
+          ]
+        }
+      },
+      {
+        "id": "host-v20",
+        "hostname": "HostV20",
+        "type": "host",
+        "interfaces": [
+          {
+            "name": "eth0",
+            "ip": "10.0.20.10",
+            "mask": "255.255.255.0",
+            "gateway": "10.0.20.1",
+            "status": "up"
+          }
+        ],
+        "routing": { "enabled": false, "routes": [], "svis": [] }
+      }
+    ],
+    "links": [
+      {
+        "id": "link1",
+        "from": { "device": "host-v10", "interface": "eth0" },
+        "to": { "device": "l3switch", "interface": "Gi0/1" }
+      },
+      {
+        "id": "link2",
+        "from": { "device": "host-v20", "interface": "eth0" },
+        "to": { "device": "l3switch", "interface": "Gi0/2" }
+      }
+    ]
+  },
+  "injected_fault": {
+    "device": "l3switch",
+    "field": "svi.20.status",
+    "value": "down",
+    "action": "set"
+  },
+  "ticket": {
+    "title": "VLAN 10 can't reach VLAN 20",
+    "symptom": "Users in VLAN 10 (10.0.10.0/24) cannot reach any host in VLAN 20 (10.0.20.0/24). Intra-VLAN traffic works fine on both VLANs.",
+    "affected_hosts": ["host-v10"]
+  },
+  "win_condition": {
+    "type": "ping",
+    "source": "host-v10",
+    "destination": "10.0.20.10",
+    "expected": "success"
+  },
+  "reference_solution": [
+    {
+      "device": "l3switch",
+      "commands": [
+        "configure terminal",
+        "interface Vlan20",
+        "no shutdown",
+        "end"
+      ]
+    }
+  ],
+  "layout": {
+    "host-v10": { "x": 100, "y": 50 },
+    "l3switch": { "x": 300, "y": 150 },
+    "host-v20": { "x": 500, "y": 50 }
+  }
+}

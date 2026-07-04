@@ -1,0 +1,15 @@
+{
+  "name": "no-route-to-host",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A browser-based network troubleshooting game where the player is the on-call network engineer",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "validate": "node dist/validator/index.js",
+    "validate:hook": "node dist/hooks/index.js",
+    "watch:scenarios": "node dist/hooks/index.js --watch",
+    "mcp": "node dist/mcp-server/index.js",
+    "start": "node dist/server/index.js"
+  }
+}
