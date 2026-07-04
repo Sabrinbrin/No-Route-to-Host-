@@ -15,6 +15,7 @@ declare module 'node:path' {
   export function dirname(path: string): string;
   export function basename(path: string, ext?: string): string;
   export function extname(path: string): string;
+  export const sep: string;
 }
 
 declare module 'node:url' {

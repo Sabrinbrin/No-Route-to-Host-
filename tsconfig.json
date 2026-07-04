@@ -15,8 +15,7 @@
     "rootDir": "./src",
     "paths": {
       "@engine/*": ["./src/engine/*"]
-    },
-    "ignoreDeprecations": "6.0"
+    }
   },
   "include": ["src/**/*", "src/**/*.d.ts"]
 }

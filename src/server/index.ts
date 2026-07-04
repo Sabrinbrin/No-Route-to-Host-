@@ -4,7 +4,7 @@
  */
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, resolve, extname } from 'node:path';
+import { join, resolve, extname, sep } from 'node:path';
 import {
   Scenario,
   GameState,
@@ -199,8 +199,22 @@ const server = createServer((req, res) => {
     return;
   }
 
-  let filePath = url;
-  const fullPath = join(publicDir, filePath);
+  // Strip query string and decode, then resolve and confirm the path stays
+  // within publicDir — prevents traversal like GET /../../etc/passwd.
+  let requestPath: string;
+  try {
+    requestPath = decodeURIComponent(url.split('?')[0]);
+  } catch {
+    res.writeHead(400);
+    res.end('Bad request');
+    return;
+  }
+  const fullPath = resolve(publicDir, '.' + requestPath);
+  if (fullPath !== publicDir && !fullPath.startsWith(publicDir + sep)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
 
   try {
     if (!existsSync(fullPath)) {
