@@ -5,14 +5,14 @@ import { TicketPanel } from './components/TicketPanel';
 import { Topology } from './components/Topology';
 import { AuthorStudio } from './components/AuthorStudio';
 
-type Screen = 'dashboard' | 'play' | 'author';
+type Screen = 'landing' | 'dashboard' | 'play' | 'author';
 
 const TAG = (d: number) => (d <= 2 ? 'Switching' : d <= 4 ? 'Routing / Firewall' : 'Cloud / OS');
 const CHIP = (d: number) => (d <= 1 ? 's' : d <= 3 ? 'c' : 'f');
 const DIFF = (d: number) => (d <= 1 ? 'Starter' : d <= 3 ? 'Core' : 'Advanced');
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('dashboard');
+  const [screen, setScreen] = useState<Screen>('landing');
   const scenarios = useMemo(() => listScenarios(), []);
   const [session, setSession] = useState<GameSession | null>(null);
   const [ticketNum, setTicketNum] = useState(1);
@@ -54,19 +54,23 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="brand">
-          <span className="logo"><i /></span> No Route to Host
-        </div>
-        <nav className="nav">
-          <button className={screen === 'dashboard' ? 'active' : ''} onClick={() => setScreen('dashboard')}>Scenarios</button>
-          <button className={screen === 'author' ? 'active' : ''} onClick={() => setScreen('author')}>Author studio</button>
-        </nav>
-        <div className="spacer" />
-        <div className="pill"><span className="dot" /> Engine ready · {scenarios.length} scenarios</div>
-      </header>
+      {screen !== 'landing' && (
+        <header className="header">
+          <div className="brand" onClick={() => setScreen('landing')} style={{ cursor: 'pointer' }}>
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#14161B"/><circle cx="16" cy="16" r="4" fill="#7C3AED"/><path d="M16 6v4M16 22v4M6 16h4M22 16h4" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round"/></svg>
+            <span>No Route to Host</span>
+          </div>
+          <nav className="nav">
+            <button className={screen === 'dashboard' ? 'active' : ''} onClick={() => setScreen('dashboard')}>Scenarios</button>
+            <button className={screen === 'author' ? 'active' : ''} onClick={() => setScreen('author')}>Author studio</button>
+          </nav>
+          <div className="spacer" />
+          <div className="pill"><span className="dot" /> Engine ready · {scenarios.length} scenarios</div>
+        </header>
+      )}
 
       <div className="content">
+        {screen === 'landing' && <Landing onPlay={() => play(scenarios[0]?.id)} onBrowse={() => setScreen('dashboard')} onAuthor={() => setScreen('author')} scenarioCount={scenarios.length} />}
         {screen === 'dashboard' && <Dashboard scenarios={scenarios} onPlay={play} />}
         {screen === 'author' && <AuthorStudio />}
         {screen === 'play' && session && (
@@ -85,6 +89,10 @@ export function App() {
         )}
       </div>
 
+      <footer style={{ padding: '16px 22px', textAlign: 'center', fontSize: 12, color: '#8b949e', borderTop: '1px solid var(--border)' }}>
+        Built by <a href="https://github.com/Sabrinbrin" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>@Sabrinbrin</a> with Kiro
+      </footer>
+
       {solved && session && (
         <Debrief
           scenario={session.scenario}
@@ -93,6 +101,93 @@ export function App() {
           onNext={() => { setSolved(false); setScreen('dashboard'); }}
         />
       )}
+    </div>
+  );
+}
+
+
+function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => void; onBrowse: () => void; onAuthor: () => void; scenarioCount: number }) {
+  return (
+    <div style={{ minHeight: '100vh', background: '#F4F6FA' }}>
+      {/* Header */}
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '22px 26px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#14161B"/><circle cx="16" cy="16" r="4" fill="#7C3AED"/><path d="M16 6v4M16 22v4M6 16h4M22 16h4" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.2px', color: '#14161B' }}>No Route to Host</span>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onAuthor} style={{ fontSize: 14, fontWeight: 500, color: '#14161B', padding: '9px 15px', borderRadius: 9, border: '1px solid #E3E7EE', background: '#fff', cursor: 'pointer' }}>For instructors</button>
+          <button onClick={onBrowse} style={{ fontSize: 14, fontWeight: 600, color: '#fff', padding: '9px 17px', borderRadius: 9, background: '#7C3AED', border: 'none', cursor: 'pointer' }}>Start training</button>
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '54px 26px 40px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 500, color: '#5B21B6', background: 'rgba(124,58,237,.09)', border: '1px solid rgba(124,58,237,.2)', padding: '6px 12px', borderRadius: 999 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#7C3AED' }}></span>
+            Diagnostic training, validated before you play
+          </div>
+          <h1 style={{ fontSize: 52, lineHeight: 1.04, letterSpacing: '-1.4px', margin: '20px 0 0', fontWeight: 700, color: '#14161B' }}>Learn to find<br/>the one broken<br/>thing.</h1>
+          <p style={{ fontSize: 17, lineHeight: 1.6, color: '#5B6472', margin: '20px 0 0', maxWidth: 440 }}>A broken network, a vague ticket, a ticking clock. Diagnose it through a real vendor CLI and fix the misconfiguration — the way the job actually feels, not the way labs teach it.</p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+            <button onClick={onPlay} style={{ fontSize: 15, fontWeight: 600, color: '#fff', padding: '12px 22px', borderRadius: 10, background: '#7C3AED', border: 'none', cursor: 'pointer', boxShadow: '0 6px 18px rgba(124,58,237,.28)' }}>Play scenario 1 →</button>
+            <button onClick={onBrowse} style={{ fontSize: 15, fontWeight: 600, color: '#14161B', padding: '12px 22px', borderRadius: 10, border: '1px solid #E3E7EE', background: '#fff', cursor: 'pointer' }}>Browse scenarios</button>
+          </div>
+          <div style={{ display: 'flex', gap: 26, marginTop: 34 }}>
+            <div><div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.5px', color: '#14161B' }}>{scenarioCount}</div><div style={{ fontSize: 12.5, color: '#5B6472', marginTop: 2 }}>scenarios, switching → firewall</div></div>
+            <div style={{ width: 1, background: '#E3E7EE' }}></div>
+            <div><div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.5px', color: '#14161B' }}>100%</div><div style={{ fontSize: 12.5, color: '#5B6472', marginTop: 2 }}>agent-verified solvable & fair</div></div>
+            <div style={{ width: 1, background: '#E3E7EE' }}></div>
+            <div><div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.5px', color: '#14161B' }}>0</div><div style={{ fontSize: 12.5, color: '#5B6472', marginTop: 2 }}>labs hand-checked by you</div></div>
+          </div>
+        </div>
+
+        {/* Terminal mockup */}
+        <div style={{ background: '#0E1116', borderRadius: 16, border: '1px solid #21262d', boxShadow: '0 24px 60px rgba(14,17,22,.32)', overflow: 'hidden' }}>
+          <div style={{ height: 38, display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px', borderBottom: '1px solid #21262d' }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#F85149' }}></span>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#F5A623' }}></span>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#3FB950' }}></span>
+            <span style={{ marginLeft: 10, fontFamily: 'var(--mono)', fontSize: 12, color: '#8B949E' }}>SW1 — console</span>
+          </div>
+          <div style={{ padding: '16px 18px', fontFamily: 'var(--mono)', fontSize: 12.5, lineHeight: 1.75 }}>
+            <div style={{ color: '#8B949E' }}>SW1# <span style={{ color: '#E6EDF3' }}>ping 10.0.10.1</span></div>
+            <div style={{ color: '#F85149' }}>.....  Success rate is 0 percent (0/5)</div>
+            <div style={{ color: '#8B949E' }}>SW1# <span style={{ color: '#E6EDF3' }}>show vlan brief</span></div>
+            <div style={{ color: '#C9D1D9' }}>10   DATA    active   Gi0/2, Gi0/3</div>
+            <div style={{ color: '#C9D1D9' }}>20   VOICE   active   <span style={{ background: 'rgba(248,81,73,.22)', color: '#F85149' }}>Gi0/1</span> ← Host A is here?</div>
+            <div style={{ color: '#8B949E', marginTop: 6 }}>SW1(config-if)# <span style={{ color: '#E6EDF3' }}>switchport access vlan 10</span></div>
+            <div style={{ color: '#8B949E' }}>SW1# <span style={{ color: '#E6EDF3' }}>ping 10.0.10.1</span></div>
+            <div style={{ color: '#3FB950' }}>!!!!!  Success rate is 100 percent (5/5)</div>
+            <div style={{ color: '#58A6FF', marginTop: 4 }}>✓ Ticket #4471 resolved<span style={{ display: 'inline-block', width: 8, height: 15, background: '#3FB950', marginLeft: 3, verticalAlign: -2, animation: 'blink 1.1s step-end infinite' }}></span></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Feature cards */}
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '18px 26px 40px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+        <div style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: 14, padding: 22 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(124,58,237,.1)', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontFamily: 'var(--mono)' }}>$</div>
+          <div style={{ fontWeight: 600, fontSize: 15.5, marginTop: 14, color: '#14161B' }}>Real vendor CLI</div>
+          <div style={{ fontSize: 13.5, color: '#5B6472', lineHeight: 1.55, marginTop: 6 }}>IOS, FortiOS, AWS CLI, iptables, PowerShell — with Tab autocomplete and abbreviations.</div>
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: 14, padding: 22 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(18,161,80,.1)', color: '#12A150', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>◇</div>
+          <div style={{ fontWeight: 600, fontSize: 15.5, marginTop: 14, color: '#14161B' }}>One fault, deterministic</div>
+          <div style={{ fontSize: 13.5, color: '#5B6472', lineHeight: 1.55, marginTop: 6 }}>Constraint evaluation, not packet sim. Each scenario disables exactly one reachability condition.</div>
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: 14, padding: 22 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(124,58,237,.1)', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>⚑</div>
+          <div style={{ fontWeight: 600, fontSize: 15.5, marginTop: 14, color: '#14161B' }}>Kiro plays it first</div>
+          <div style={{ fontSize: 13.5, color: '#5B6472', lineHeight: 1.55, marginTop: 6 }}>On save, a Kiro agent drives the sim through MCP and proves each lab is solvable & fair.</div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ textAlign: 'center', padding: '20px 0 40px', fontSize: 12.5, color: '#8B949E' }}>
+        Built by <a href="https://github.com/Sabrinbrin" target="_blank" rel="noopener noreferrer" style={{ color: '#7C3AED', textDecoration: 'none', fontWeight: 500 }}>@Sabrinbrin</a> with Kiro
+      </div>
     </div>
   );
 }
