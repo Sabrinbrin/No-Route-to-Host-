@@ -1,12 +1,17 @@
+Here's the complete corrected README. Every number matches your `origin/main` source. Paste it over your current `README.md`.
+
+```markdown
 # No Route to Host
 
-> **[▶ Play it live](https://sabrinbrin.github.io/No-Route-to-Host-/)** no install needed, runs entirely in your browser.
+> **[▶ Play it live](https://sabrinbrin.github.io/No-Route-to-Host-/)** — no install needed, runs entirely in your browser.
 
 **A diagnostic-training platform for network engineers, where Kiro validates every scenario before a student ever sees it.**
 
 You're the on-call engineer. A broken network, a vague ticket, a ticking clock. Diagnose it through a real vendor CLI. Fix the one misconfiguration. Beat the clock.
 
-The twist: **Kiro plays every scenario first** driving the simulation through a self-built MCP server — to prove it's solvable and fair. Authoring a broken lab fails loudly and immediately.
+The twist: **Kiro plays every scenario first** — driving the simulation through a self-built MCP server to prove it's solvable and fair. Authoring a broken lab fails loudly and immediately.
+
+> **Where the AI lives:** Kiro validates at **authoring time** through the MCP server; the game deployed to GitHub Pages is pure static files running the same engine. The guarantee is proven before anything ships, then re-enforced by a deterministic validator in CI on every commit — no AI and no backend at play time.
 
 ---
 
@@ -18,7 +23,15 @@ The twist: **Kiro plays every scenario first** driving the simulation through a 
   </a>
 </p>
 
----
+<!-- Optional proof GIFs — add the files under docs/ then uncomment:
+**On-save hook — break a scenario, save, instant FAIL:**
+
+<img src="docs/nrth-hook.gif" alt="On-save hook validating a scenario" width="100%">
+
+**Kiro validates via MCP (three prompts in Kiro chat):**
+
+<img src="docs/nrth-mcp.gif" alt="Kiro validating scenarios through the MCP server" width="100%">
+-->
 
 ---
 
@@ -46,7 +59,7 @@ docker run -p 8080:8080 nrth
 ### Other commands
 
 ```bash
-npm test                    # engine unit tests (44)
+npm test                    # engine unit tests
 npm run validate            # validate all 11 scenarios (solvable + fair)
 npm run watch:scenarios     # on-save hook (re-validates YAML on change)
 npm run mcp                 # MCP server (stdio) for the Kiro agent
@@ -82,7 +95,7 @@ And for instructors: building fair diagnostic exercises by hand is slow and erro
 | 10 | Docker Container Unreachable | OS Host | ★★★★☆ | iptables FORWARD blocked |
 | 11 | Windows Firewall Blocking ICMP | OS Host | ★★★☆☆ | No inbound allow rule |
 
-Every scenario is **agent-verified solvable & fair** before it reaches the player.
+Every scenario is **agent-verified solvable & fair** at authoring time before it reaches the player.
 
 ---
 
@@ -113,7 +126,13 @@ Every scenario is **agent-verified solvable & fair** before it reaches the playe
 This project demonstrates Kiro's full capability stack working together:
 
 ### MCP Server (official SDK)
-7 tools on `@modelcontextprotocol/sdk` (stdio transport): `list_scenarios`, `load_scenario`, `get_topology`, `get_ticket`, `run_command`, `check_win_condition`, `reset_scenario`.
+Built on `@modelcontextprotocol/sdk` (stdio transport) — **8 tools, 12 resources, 3 prompts**:
+
+- **8 tools:** `list_scenarios`, `load_scenario`, `get_topology`, `get_ticket`, `run_command`, `check_win_condition`, `reset_scenario`, `validate_scenario`
+- **12 resources:** one per scenario (`scenario://<id>`) plus a `scenarios://list` index — the agent can read scenario metadata directly, without a tool call.
+- **3 prompts:** `validate-scenario`, `diagnose-scenario`, `author-new-scenario` — ready-made agent workflows.
+
+The server runs **locally over stdio next to Kiro at authoring time** — it's how the AI drives the simulation to validate content. It is not part of the deployed static game.
 
 ```json
 {
@@ -165,12 +184,12 @@ Real IOS/FortiOS/AWS CLI feel with abbreviation support:
 
 ## Adding New Scenarios
 
-1. Create a JSON file in `scenarios/`
+1. Create a YAML file in `scenarios/`
 2. Define: `topology`, `injected_fault`, `ticket`, `win_condition`, `reference_solution`
 3. Save → the on-save hook validates automatically
 4. If it passes, it's guaranteed solvable and fair
 
-See existing scenarios for the schema. Each scenario disables exactly **one** reachability condition; the fix re-satisfies exactly that one.
+See existing scenarios for the schema (and `AUTHORING.md` for the full guide). Each scenario disables exactly **one** reachability condition; the fix re-satisfies exactly that one.
 
 ---
 
@@ -207,7 +226,7 @@ See existing scenarios for the schema. Each scenario disables exactly **one** re
 - **TypeScript** end-to-end, in an **npm-workspaces monorepo**
 - **React 18 + Vite + xterm.js** web app — runs the engine client-side (no backend)
 - **@nrth/engine** — pure, deterministic, browser-safe simulation engine
-- **@modelcontextprotocol/sdk** — the MCP server (stdio)
+- **@modelcontextprotocol/sdk** — the MCP server (8 tools, 12 resources, 3 prompts; stdio)
 - **YAML** scenario data (`js-yaml`)
 - **Docker** for deployment
 
@@ -220,3 +239,4 @@ MIT
 ---
 
 Built by [@Sabrinbrin](https://github.com/Sabrinbrin) with [Kiro](https://kiro.dev)
+```
