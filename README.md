@@ -13,7 +13,9 @@ The twist: **Kiro plays every scenario first** — driving the simulation throug
 ## 30-Second Demo
 
 <p align="center">
-  <img src="docs/demo-gameplay.gif" alt="Gameplay: diagnose wrong VLAN, fix, ticket resolved" width="720" />
+  <a href="https://youtu.be/YOUR_GAMEPLAY_VIDEO_ID">
+    <img src="https://img.shields.io/badge/▶_Watch_Demo-Gameplay-red?style=for-the-badge&logo=youtube" alt="Watch Gameplay Demo" />
+  </a>
 </p>
 
 > **Play loop:** Pick up a ticket → investigate with `show vlan brief` → spot the wrong VLAN → fix with `sw acc vlan 10` → link goes green → ticket resolved.
@@ -23,6 +25,12 @@ The twist: **Kiro plays every scenario first** — driving the simulation throug
 ## Demo Evidence: Kiro Validates via MCP
 
 ### On-save hook: break a scenario → instant FAIL
+
+<p align="center">
+  <a href="https://youtu.be/YOUR_ONSAVE_HOOK_VIDEO_ID">
+    <img src="https://img.shields.io/badge/▶_Watch_Demo-On--Save_Hook-red?style=for-the-badge&logo=youtube" alt="Watch On-Save Hook Demo" />
+  </a>
+</p>
 
 ```bash
 $ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
@@ -37,11 +45,13 @@ $ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
   ✓ Wrong Access VLAN (wrong-access-vlan) — Solvable in 4 steps.
 ```
 
-<p align="center">
-  <img src="docs/demo-onsave-hook.gif" alt="On-save hook: break scenario → FAIL, fix → PASS" width="720" />
-</p>
-
 ### MCP agent plays the game (validate_scenario tool)
+
+<p align="center">
+  <a href="https://youtu.be/YOUR_MCP_VALIDATE_VIDEO_ID">
+    <img src="https://img.shields.io/badge/▶_Watch_Demo-MCP_Validation-red?style=for-the-badge&logo=youtube" alt="Watch MCP Validation Demo" />
+  </a>
+</p>
 
 ```bash
 $ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
@@ -57,20 +67,6 @@ $ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
   "details": "Solvable in 4 steps, fair."
 }
 ```
-
-<p align="center">
-  <img src="docs/demo-mcp-validate.gif" alt="MCP server: agent calls validate_scenario tool" width="720" />
-</p>
-
-> **How to record these GIFs yourself:**
-> ```bash
-> # Install asciinema + agg (or use ttyrec/terminalizer)
-> asciinema rec demo.cast
-> # Run the commands above
-> # Ctrl+D to stop, then convert:
-> agg demo.cast demo.gif
-> ```
-> Place GIFs in `docs/` and they'll render in the README.
 
 ---
 
