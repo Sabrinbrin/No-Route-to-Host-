@@ -102,3 +102,6 @@ h1 { font-size: 30px; letter-spacing: -0.6px; margin: 6px 0 4px; }
 .verdict.fail { background: rgba(229,72,77,.1); color: #b21f24; }
 .step { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #f0f2f6; }
 .step .mark { width: 18px; height: 18px; flex: none; border-radius: 5px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+
+
+@keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
