@@ -1,165 +1,68 @@
 # Tasks — No Route to Host
 
-## Phase 1: Foundation (Engine + First Scenario Playable) ✅
+Delivery plan, mapped to the phased commit history. Every phase was verified
+(`tsc -b`, engine tests, validator, MCP smoke, browser run) before the next.
 
-### Task 1.1: Project Scaffolding ✅
-- [x] Initialize project with `package.json` and `tsconfig.json`
-- [x] Create `src/engine/` for the shared simulation engine
-- [x] Create `src/mcp-server/` for the MCP server
-- [x] Create `src/server/` for the HTTP game server
-- [x] Create `src/validator/` for scenario validation
-- [x] Create `src/hooks/` for on-save automation
-- [x] Create `scenarios/` directory for scenario data
-- [x] Update `.gitignore` for TypeScript project
+## Phase 0: Engine + scenarios (foundation) ✅
 
-### Task 1.2: Engine — State Model ✅
-- [x] Define TypeScript interfaces: `NetworkState`, `Device`, `Interface`, `RoutingConfig`, `StaticRoute`, `SVI`, `Link`, `FirewallPolicy`, `NatRule`
-- [x] Define AWS cloud types: `SecurityGroup`, `NACL`, `RouteTable`, `VPCPeering`, `AWSConfig`
-- [x] Implement `loadScenario(scenario)` — builds broken state from scenario data
-- [x] Implement fault injection via `injected_fault` field
-- [x] Export all types and functions
+- [x] State model (`NetworkState`, `Device`, interfaces, routing, SVIs, links) — *US-6*
+- [x] AWS cloud types (`SecurityGroup`, `NACL`, `RouteTable`, `AWSConfig`) and OS types (`OSConfig`, `iptables`, `windowsFirewall`)
+- [x] `evaluatePing` — ordered 7-condition reachability chain — *US-5, Conditions 1–7*
+- [x] CLI parser: IOS subset + abbreviations, `aws ec2 *`, `iptables`, PowerShell firewall — *US-2, US-3*
+- [x] `loadScenario` / `checkWinCondition` / fault injection
+- [x] 11 scenarios: 5 switching/routing/firewall + 3 AWS + 3 OS host-firewall
 
-### Task 1.3: Engine — Reachability Evaluator ✅
-- [x] Implement `evaluatePing(state, sourceDevice, destIP)` with ordered condition chain
-- [x] Condition 1: Validate source host has IP/mask/gateway
-- [x] Condition 2: Validate source access VLAN has valid L2 path
-- [x] Condition 3: Validate trunk carries the required VLAN
-- [x] Condition 4: Validate L3 routing (enabled, SVI up, route exists)
-- [x] Condition 5: Validate firewall policy permits traffic
-- [x] Condition 6: Validate AWS security groups, NACLs, and route tables
-- [x] Return `PingResult` with success/failure and reason
-- [x] Handle direct router/firewall/EC2 connections (no VLAN needed)
+## Phase 1: npm workspaces monorepo ✅  (`refactor: Phase 1`)
 
-### Task 1.4: Engine — CLI Parser ✅
-- [x] Implement IOS-style command abbreviation (`abbr()` helper)
-- [x] Implement `show interfaces` / `show ip route` / `show vlan brief` / `show running-config`
-- [x] Implement `show ip int brief` / `show firewall`
-- [x] Implement `ping <ip>` — calls reachability evaluator
-- [x] Implement `configure terminal` (+ `conf t` shortform)
-- [x] Implement `interface <name>` (+ `int` shortform)
-- [x] Implement `switchport access vlan <id>` (+ `sw acc vlan` shortform)
-- [x] Implement `switchport trunk allowed vlan add <id>`
-- [x] Implement `ip routing` / `ip route <net> <mask> <nh>`
-- [x] Implement `no shutdown` / `shutdown` (+ `no shut` shortform)
-- [x] Implement `set firewall policy` — state mutation
-- [x] Implement AWS CLI: `aws ec2 describe-security-groups`, `authorize-security-group-ingress/egress`
-- [x] Implement AWS CLI: `aws ec2 create-route`, `replace-route`, `create-network-acl-entry`
-- [x] Implement `end` / `exit` — mode transitions
-- [x] Handle unknown commands with help text
+- [x] Split `src/` into `packages/{engine,mcp-server,validator,hooks}` (+ `frontend` in Phase 4)
+- [x] `@nrth/engine` is browser-safe (pure, no Node imports) so the web app can import it
+- [x] `tsconfig.base` + per-package tsconfig + solution references; `tsc -b` build order
+- [x] Replace hand-rolled `node.d.ts` with real `@types/node`
+- [x] Verify: tsc -b clean, 44/44 engine tests, 11/11 solvable+fair, MCP lists 11
 
-### Task 1.5: Engine — Scenario Loader ✅
-- [x] Implement JSON parser for scenario format
-- [x] Validate scenario schema (required fields present)
-- [x] Build `NetworkState` from `topology` field
-- [x] Apply `injected_fault` to produce broken initial state
-- [x] Implement `checkWinCondition(state, winCondition)` — evaluates win assertion
+## Phase 2: YAML scenarios ✅  (`feat: Phase 2`)
 
-### Task 1.6: Scenarios 1–5 (Traditional Networking) ✅
-- [x] Scenario 1: Wrong Access VLAN — verified solvable in 4 steps
-- [x] Scenario 2: Trunk Allowed-List Gap — verified solvable in 4 steps
-- [x] Scenario 3: Inter-VLAN Routing Down — verified solvable in 4 steps
-- [x] Scenario 4: Missing Default Route — verified solvable in 3 steps
-- [x] Scenario 5: Firewall Tunnel Blackhole — verified solvable in 3 steps
+- [x] Add `js-yaml`; `parseScenario()` loads YAML (superset of JSON) — *US-6*
+- [x] Convert all 11 `scenarios/*.json` → `*.yaml` (verified byte-for-byte round-trip)
+- [x] Update every reader (validator, hooks, mcp-server, engine tests) to YAML
+- [x] On-save hook glob → `scenarios/**/*.yaml`
 
-### Task 1.7: Scenarios 6–8 (AWS Cloud Networking) ✅
-- [x] Scenario 6: EC2 Security Group Blocking ICMP — verified solvable in 1 step
-- [x] Scenario 7: VPC Route Table Missing Peering Route — verified solvable in 1 step
-- [x] Scenario 8: NACL Blocking Return Traffic — verified solvable in 1 step
+## Phase 3: MCP server on the official SDK ✅  (`feat: Phase 3`)
 
----
+- [x] Replace hand-rolled JSON-RPC with `@modelcontextprotocol/sdk` (`McpServer` + stdio) — *US-7*
+- [x] 7 zod-typed tools over the shared engine
+- [x] Verify with a real MCP `Client`: connect → list → play a scenario to a win
 
-## Phase 2: MCP Server + Validation ✅
+## Phase 4: React + Vite + xterm.js web app ✅  (`feat: Phase 4`)
 
-### Task 2.1: MCP Server Implementation ✅
-- [x] Implement JSON-RPC 2.0 protocol over stdio transport
-- [x] Import shared engine (single source of truth)
-- [x] Implement `get_topology` tool
-- [x] Implement `get_ticket` tool
-- [x] Implement `run_command` tool
-- [x] Implement `check_win_condition` tool
-- [x] Implement `reset_scenario` tool
-- [x] Implement `load_scenario` tool
-- [x] Implement `list_scenarios` tool
-- [x] Tested end-to-end: load → detect fault → fix → confirm resolution
+- [x] `packages/frontend` — React 18 + Vite + TypeScript — *US-1, US-2, US-3, US-4, US-10*
+- [x] xterm.js terminal with a line editor wired to `executeCommand` — *US-2*
+- [x] Topology, ticket panel, device tabs, timer, debrief/score overlay — *US-1, US-4, US-10*
+- [x] Author Studio: live solvable+fair validation in-browser (no mocks) — *US-8*
+- [x] Scenarios bundled from `scenarios/*.yaml` via `import.meta.glob`
+- [x] Client-side engine → no backend, no sessions, no CDN; honest "Engine ready" state
+- [x] Retire the old dc.html server + vendored assets
+- [x] Verify in a real browser (external blocked): play to win + Author Studio PASS, zero external requests
 
-### Task 2.2: Validation Agent ✅
-- [x] Implement validation flow: load → assert broken → run solution → assert fixed
-- [x] Verify initial state is broken (`check_win_condition()` → false)
-- [x] Execute `reference_solution` commands via engine
-- [x] Assert `check_win_condition()` → true after fix
-- [x] Implement detailed reporting (pass/fail with reasons)
-- [x] Run against all 8 scenarios — all pass
+## Phase 5: quality gates, specs, docs ✅  (`chore/docs: Phase 5`)
 
-### Task 2.3: Steering File ✅
-- [x] Create `.kiro/steering/networking-trainer.md` with `inclusion: always`
-- [x] Document architecture invariants (constraint-based, no packet sim)
-- [x] Document CLI grammar rules and abbreviation conventions
-- [x] Document validation definitions (SOLVABLE + FAIR criteria)
-- [x] Document agent behaviour rules (never edit engine, report failures)
-- [x] Document MCP tool contracts and configuration
+- [x] Engine unit suite (`packages/engine/test`, zero-dep) — locks the fault→condition mapping — *US-5*
+- [x] Validator enforces FAIR verdicts (`already-solved | unsolvable | symptom-mismatch | unintended-solution`) — *US-8*
+- [x] CI: `npm ci` → build → engine tests → validator → MCP smoke — *US-9 as CI gate*
+- [x] `.kiro/` on-save hook + validation-agent + steering aligned to the new paths
+- [x] requirements.md / design.md / tasks.md match the shipped code (spec ↔ code)
 
-### Task 2.4: On-Save Hook ✅
-- [x] Implement file watcher on `scenarios/*.json`
-- [x] On change: parse JSON, validate schema, run validation
-- [x] Format output: ✓/✗ with scenario name and details
-- [x] Exit code: 0 = pass, 1 = fail (CI-compatible)
-- [x] Support modes: validate-all, single-file, --watch
-- [x] Tested: catches intentionally broken scenarios
+## Spec → code traceability
 
----
-
-## Phase 3: Web Frontend ✅
-
-### Task 3.1: Game Server ✅
-- [x] HTTP server with JSON API + static file serving
-- [x] API endpoints: /api/scenarios, /api/load, /api/command, /api/check, /api/reset, /api/state
-- [x] Support PORT env variable for flexible deployment
-- [x] CORS headers for cross-origin access
-- [x] Serve DC HTML UI at root `/`
-
-### Task 3.2: Frontend UI (DC Framework) ✅
-- [x] Landing page with project pitch and feature highlights
-- [x] Scenario dashboard with all 8 scenarios, difficulty ratings
-- [x] Play screen: terminal + topology diagram + ticket panel
-- [x] Terminal with command input, history, and coloured output
-- [x] Real-time prompt updates reflecting CLI mode (exec/config/config-if)
-- [x] Live MCP status indicator (green/red dot, polls every 10s)
-- [x] Victory/debrief screen with efficiency scoring (grade A–D)
-- [x] Author studio with YAML editor and animated validation agent
-- [x] Hints system with escalating cost
-- [x] Timer and command counter
-
-### Task 3.3: Backend Wiring ✅
-- [x] All terminal commands routed to `POST /api/command` (real engine)
-- [x] Scenario loading via `POST /api/load`
-- [x] Win condition checked automatically after state changes
-- [x] Reset via `POST /api/reset`
-- [x] Dashboard fetches real scenario list from `GET /api/scenarios`
-
----
-
-## Phase 4: Polish & Deployment ✅
-
-### Task 4.1: Dockerfile ✅
-- [x] Multi-stage build: TypeScript compile → minimal Node.js runtime
-- [x] Expose port 3000
-- [x] One-command start: `docker build -t nrth . && docker run -p 8080:3000 nrth`
-
-### Task 4.2: Error Handling ✅
-- [x] Server gracefully handles malformed JSON
-- [x] Server returns proper error responses for unknown endpoints
-- [x] CLI parser returns helpful messages for unknown commands
-- [x] Scenario loader validates schema before loading
-
-### Task 4.3: Documentation ✅
-- [x] README with compelling pitch, quick start, architecture, scenario table
-- [x] MCP configuration documented
-- [x] How to add new scenarios documented
-- [x] Demo script for hackathon presentation
-
-### Task 4.4: End-to-End Verification ✅
-- [x] All 8 scenarios pass validation
-- [x] MCP server handles all tools correctly
-- [x] HTTP server serves game and API
-- [x] On-save hook catches broken scenarios
-- [x] IOS abbreviations work (sh ip int bri, conf t, sw acc vlan, etc.)
+| Requirement | Implemented in |
+|-------------|----------------|
+| US-1 ticket/topology | `frontend` TicketPanel, Topology |
+| US-2 CLI investigate | `engine` cli-parser + `frontend` xterm Terminal |
+| US-3 config fixes | `engine` cli-parser |
+| US-4 win + score | `engine` checkWinCondition + `frontend` Debrief |
+| US-5 reachability (Cond 1–7) | `engine` reachability.ts + `engine/test` |
+| US-6 scenario data (YAML) | `engine` scenario-loader + `scenarios/*.yaml` |
+| US-7 MCP API | `mcp-server` (official SDK) |
+| US-8 validation (solvable+fair) | `validator` + `frontend` Author Studio |
+| US-9 on-save hook | `hooks` + `.kiro/hooks/on-save-validate.md` + CI |
+| US-10 live topology | `frontend` Topology (re-renders on state change) |

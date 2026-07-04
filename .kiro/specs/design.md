@@ -1,56 +1,62 @@
 # Design — No Route to Host
 
-> **As-built.** This document describes the system as implemented. An earlier
-> draft proposed an npm-workspaces / React+Vite / MCP-SDK / YAML stack; the
-> project was instead built as a single zero-dependency TypeScript tree with a
-> hand-rolled MCP server, JSON scenarios, and a dependency-free browser client.
-> This design reflects what actually ships.
+This design describes the system and matches the shipped code. The build is an
+npm-workspaces monorepo: one shared, browser-safe engine consumed by a React +
+Vite + xterm.js web app, an MCP server (official SDK), a CI validator, and an
+on-save hook. Scenarios are authored in YAML.
 
 ## Architecture Overview
 
-One shared engine module is imported unchanged by four consumers — the game's
-HTTP server, the MCP server, the CI validator, and the on-save hook. No
-reachability or CLI logic is duplicated.
+The engine is the single source of truth. It is a **pure, browser-safe
+package** (`@nrth/engine`, no Node imports), so the React app runs the entire
+simulation client-side, while the Node tools import the same package.
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                 Browser (dependency-free)                 │
-│   "No Route to Host.dc.html" + support.js (dc-runtime,    │
-│    a small React-lite template engine; React vendored)    │
-│         terminal · topology · ticket · debrief            │
-└───────────────────────────┬──────────────────────────────┘
-                            │ fetch() POST /api/*
-┌───────────────────────────▼──────────────────────────────┐
-│              HTTP server (Node http, no framework)        │
-│   serves the UI + /vendor assets; /api/{scenarios,load,   │
-│   command,check,reset,state}; /health                     │
-└───────────────────────────┬──────────────────────────────┘
-                            ▼
-┌──────────────────────────────────────────────────────────┐
-│                  Shared Network Engine                    │
-│      types · utils · reachability · cli-parser ·          │
-│      scenario-loader   (pure, no I/O, no clock)           │
-└───────────────────────────▲──────────────────────────────┘
-          ┌──────────────────┼───────────────────┐
-          │                  │                   │
-┌─────────┴────────┐ ┌───────┴────────┐ ┌────────┴─────────┐
-│   MCP server     │ │   Validator    │ │  On-save hook    │
-│ JSON-RPC 2.0     │ │ solvable+fair  │ │ polling watcher  │
-│ over stdio       │ │ (CI gate)      │ │ (authoring)      │
-└──────────────────┘ └────────────────┘ └──────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                  packages/frontend  (React + Vite)             │
+│   xterm.js terminal · SVG topology · ticket · debrief ·        │
+│   Author Studio (live solvable+fair validation)               │
+│   imports @nrth/engine — the whole game runs in the browser    │
+└───────────────────────────────┬───────────────────────────────┘
+                                │  (no backend API — client-side)
+┌───────────────────────────────▼───────────────────────────────┐
+│                    packages/engine  (@nrth/engine)             │
+│   types · utils · reachability · cli-parser · scenario-loader  │
+│   pure · deterministic · no I/O · no clock · no randomness     │
+└───────────────┬───────────────┬───────────────┬───────────────┘
+                │               │               │
+   ┌────────────┴──────┐ ┌──────┴────────┐ ┌────┴──────────────┐
+   │ packages/         │ │ packages/     │ │ packages/hooks    │
+   │ mcp-server        │ │ validator     │ │ on-save watcher   │
+   │ @modelcontext-    │ │ solvable+fair │ │ (authoring)       │
+   │ protocol/sdk      │ │ (CI gate)     │ │                   │
+   │ stdio transport   │ └───────────────┘ └───────────────────┘
+   └───────────────────┘
 ```
+
+## Monorepo Layout
+
+```
+packages/
+├── engine/        # @nrth/engine — shared simulation (pure, browser-safe)
+│   ├── src/       #   types, utils, reachability, cli-parser, scenario-loader
+│   └── test/      #   zero-dep engine test suite (npm test)
+├── frontend/      # React 18 + Vite + TypeScript + xterm.js web app
+├── mcp-server/    # MCP server on @modelcontextprotocol/sdk (stdio)
+├── validator/     # CI determinism + fairness gate
+└── hooks/         # on-save YAML scenario validator
+```
+
+TypeScript project references (`tsconfig.base.json` + per-package `tsconfig` +
+a solution `tsconfig.json`) build in dependency order via `tsc -b`. The
+frontend is built by Vite (`vite build`).
 
 ## Component Design
 
-### 1. Shared Network Engine (`src/engine/`)
+### 1. Shared Engine (`@nrth/engine`)
 
-The single source of truth. Pure functions over a plain-data state model — no
-I/O, no clock, no randomness — so it runs identically in the server, the MCP
-server, and CI.
-
-Modules: `types.ts` (data model), `utils.ts` (IP math + lookups),
-`reachability.ts` (`evaluatePing`), `cli-parser.ts` (`executeCommand`),
-`scenario-loader.ts` (`loadScenario`, `checkWinCondition`), `index.ts` (barrel).
+Pure functions over a plain-data state model. No I/O, no clock, no randomness —
+so it produces identical results in the browser, the MCP server, and CI.
 
 #### State Model
 
@@ -60,120 +66,82 @@ interface NetworkState { devices: Device[]; links: Link[]; }
 interface Device {
   id: string;
   hostname: string;
-  type: 'switch' | 'router' | 'firewall' | 'host' | 'ec2' | 'vpc-router';
+  type: 'switch' | 'router' | 'firewall' | 'host' | 'ec2' | 'vpc-router'
+      | 'linux-server' | 'windows-server' | 'docker-host';
   interfaces: NetworkInterface[];
   routing: RoutingConfig;
   firewallPolicies?: FirewallPolicy[];
   natRules?: NatRule[];
-  aws?: AWSConfig;                 // security groups, NACLs, route tables, VPC peerings
+  aws?: AWSConfig;      // security groups, NACLs, route tables, VPC peerings
+  os?: OSConfig;        // iptables / Windows Firewall (host-firewall scenarios)
 }
-
-interface NetworkInterface {
-  name: string; ip?: string; mask?: string;
-  status: 'up' | 'down';
-  mode?: 'access' | 'trunk';
-  accessVlan?: number; trunkAllowedVlans?: number[];
-  gateway?: string;               // host interfaces
-}
-
-interface RoutingConfig { enabled: boolean; routes: StaticRoute[]; svis: SVI[]; }
-interface StaticRoute { network: string; mask: string; nextHop: string; }
-interface SVI { vlan: number; ip: string; mask: string; status: 'up' | 'down'; }
-interface Link { id: string; from: LinkEndpoint; to: LinkEndpoint; }
-interface FirewallPolicy { id: number; srcSubnet: string; dstSubnet: string; action: 'permit' | 'deny'; interface?: string; }
 ```
 
-AWS types (`AWSConfig`) add `securityGroups[]` (stateful in/out rules),
-`nacls[]` (stateless, ordered rules), `routeTables[]` (with `active`/`blackhole`
-routes), and `vpcPeerings[]`.
+Plus `NetworkInterface`, `RoutingConfig` (enabled + `routes[]` + `svis[]`),
+`Link`, `FirewallPolicy`, and the AWS/OS config blocks.
 
-#### Reachability Evaluator — constraint chain, NOT packet forwarding
+#### Reachability Evaluator — ordered constraint chain (NOT packet forwarding)
 
 ```typescript
-interface PingResult { success: boolean; reason?: string; failedCondition?: number; }
 function evaluatePing(state: NetworkState, src: string, dstIp: string): PingResult;
+// { success, reason?, failedCondition? }
 ```
 
-`evaluatePing` checks an ordered chain and returns on the first failure:
+Returns on the first failing condition:
 
 1. Source host has a valid IP / mask / gateway.
-2. Same-subnet L2 path: source access port is in a VLAN that reaches the dest.
-3. Trunking: the VLAN is carried across every trunk on the path (BFS).
-4. L3 routing: routing enabled, SVIs/interfaces up, a longest-prefix route to
-   the destination with a reachable next-hop (recursed hop by hop).
-5. Firewall: a policy permits src→dst across any firewall in the path.
-6. AWS cloud: the VPC route table has an active route, the security group
-   allows the traffic (stateful), and the NACL allows it (stateless, both
-   directions).
-7. Host firewall: OS-level filtering permits the traffic (Linux `iptables`
-   INPUT/FORWARD chains, Docker, or Windows Firewall inbound rules).
+2. Same-subnet L2 path (access VLAN reaches the destination).
+3. Trunking carries the VLAN across every trunk on the path (BFS).
+4. L3 routing (enabled, SVIs/interfaces up, longest-prefix route + reachable next-hop).
+5. Firewall policy permits src→dst across any firewall in the path.
+6. AWS cloud (VPC route table active route + stateful security group + stateless NACL).
+7. Host firewall (Linux `iptables` INPUT/FORWARD, Docker, Windows Firewall).
 
 Each scenario's fault disables **exactly one** condition; `failedCondition`
-reports which. This mapping is locked by the engine test suite.
+reports which. The mapping is locked by the engine test suite
+(`packages/engine/test/scenarios.test.ts`).
 
 #### CLI Parser
 
-```typescript
-interface CommandResult { output: string; stateChanged: boolean; }
-function executeCommand(state: NetworkState, deviceId: string, command: string, context: CommandContext): CommandResult;
+`executeCommand(state, deviceId, command, context)` — a three-mode state
+machine (`exec → config → config-if`) accepting IOS-style abbreviations plus an
+`aws ec2` subset and host-firewall commands (Linux `iptables`, PowerShell
+`New-NetFirewallRule`).
+
+### 2. Web App (`packages/frontend`)
+
+- **React 18 + Vite + TypeScript.**
+- **Terminal:** xterm.js with a small line editor (history, backspace, coloured
+  output) dispatching lines to `@nrth/engine`'s `executeCommand`.
+- **Topology / ticket / debrief:** React components rendered from the loaded
+  scenario's `GameState`.
+- **Author Studio:** runs `validateScenario()` (the same solvable + fair logic
+  as CI) live in the browser and reports the verdict + fairness checks.
+- **Scenario loading:** `import.meta.glob('scenarios/*.yaml', '?raw')` bundles
+  every scenario at build time — the same YAML files the Node tools read.
+- Because the engine is client-side, gameplay needs **no server** and makes
+  **no external requests**; the header shows an honest "Engine ready" state.
+
+### 3. Scenario Schema (YAML)
+
+```yaml
+id: wrong-access-vlan
+title: Wrong Access VLAN
+difficulty: 1
+topology: { devices: [...], links: [...] }
+injected_fault: { device: switch1, interface: Gi0/1, field: accessVlan, value: 20, action: set }
+ticket: { title: "...", symptom: "...", affected_hosts: [host-a] }
+win_condition: { type: ping, source: host-a, destination: 10.0.10.1, expected: success }
+reference_solution:
+  - { device: switch1, commands: [configure terminal, interface Gi0/1, switchport access vlan 10, end] }
 ```
 
-A three-mode state machine (`exec → config → config-if`) that accepts IOS-style
-**abbreviations** (any unambiguous prefix: `sh`, `conf t`, `int`, `sw acc
-vlan`, `no shut`, …) and a small `aws ec2` subset for cloud scenarios.
+`parseScenario()` in the engine loads YAML (a superset of JSON) with `js-yaml`.
 
-### 2. CLI Command Subset
+### 4. MCP Server (`packages/mcp-server`)
 
-| Command | Mode | Effect |
-|---------|------|--------|
-| `show interfaces` / `show ip route` / `show vlan brief` / `show running-config` / `show ip int brief` / `show firewall` | exec | Formatted device state |
-| `ping <ip>` | exec | Evaluate reachability from this device |
-| `aws ec2 describe-*` | exec | Show security groups / route tables / NACLs / peerings |
-| `configure terminal` | exec | Enter config mode |
-| `interface <name>` | config | Enter interface sub-mode |
-| `ip routing` / `ip route <net> <mask> <nh>` | config | L3 routing / static route |
-| `set firewall policy <src> <dst> permit\|deny [interface <n>]` | config | Firewall policy |
-| `aws ec2 authorize-security-group-ingress/egress`, `create-route`, `replace-route`, `create-network-acl-entry` | exec | Mutate AWS config |
-| `switchport access vlan <id>` / `switchport trunk allowed vlan add <id>` | config-if | VLAN config |
-| `ip address <ip> <mask>` / `no shutdown` / `shutdown` | config-if | Interface config |
-| `end` / `exit` | config/-if | Mode transitions |
-
-Vendor flavour by device: IOS-style for switches/routers, FortiOS-style `set`
-for the firewall, an AWS CLI subset for `ec2` / `vpc-router`.
-
-### 3. Scenario Data Schema (JSON)
-
-Scenarios are JSON files in `scenarios/`. The `injected_fault` is applied at
-load to produce the broken initial state.
-
-```json
-{
-  "id": "wrong-access-vlan",
-  "title": "Wrong Access VLAN",
-  "difficulty": 1,
-  "topology": { "devices": [ /* ... */ ], "links": [ /* ... */ ] },
-  "injected_fault": { "device": "switch1", "interface": "Gi0/1", "field": "accessVlan", "value": 20, "action": "set" },
-  "ticket": { "title": "Host A can't reach its gateway", "symptom": "...", "affected_hosts": ["host-a"] },
-  "win_condition": { "type": "ping", "source": "host-a", "destination": "10.0.10.1", "expected": "success" },
-  "reference_solution": [ { "device": "switch1", "commands": ["configure terminal", "interface Gi0/1", "switchport access vlan 10", "end"] } ],
-  "layout": { "switch1": { "x": 200, "y": 150 } }
-}
-```
-
-### 4. HTTP Server (`src/server/`)
-
-Plain `node:http`, no framework. Serves the DC UI at `/`, `support.js` and
-`public/vendor/*` (React + IBM Plex, self-hosted), and a JSON API:
-`/api/scenarios`, `/api/load`, `/api/command`, `/api/check`, `/api/reset`,
-`/api/state`, plus `/health`. Hardening: 64 KB body cap (413), JSON-parse
-guard (400), method guard (405), and a path-traversal guard that confines
-static reads to the web root. `PORT` is read from the environment.
-
-### 5. MCP Server (`src/mcp-server/`) — hand-rolled JSON-RPC
-
-A dependency-free JSON-RPC 2.0 implementation over stdio (newline-delimited
-messages), advertising `protocolVersion` `2024-11-05`. It imports the shared
-engine directly.
+Built on the official **`@modelcontextprotocol/sdk`** (`McpServer` +
+`StdioServerTransport`, zod-typed inputs). Imports `@nrth/engine`. Tools:
 
 | Tool | Parameters | Returns |
 |------|-----------|---------|
@@ -185,92 +153,45 @@ engine directly.
 | `check_win_condition` | none | `{resolved, details, ...}` |
 | `reset_scenario` | none | `{success, title}` |
 
-### 6. Web Client (`src/No Route to Host.dc.html` + `src/support.js`)
+### 5. Validator (`packages/validator`) — CI determinism + fairness gate
 
-A single self-contained `.dc.html` "design component": a `<x-dc>` template
-(landing, dashboard, play, debrief, author screens) plus an inline `Component`
-class. `support.js` is a small generated **dc-runtime** — a React-lite template
-compiler (`{{ }}`, `<sc-if>`, `<sc-for>`, `<helmet>`) that mounts the component.
-React and the IBM Plex fonts are **vendored** under `public/vendor/` and loaded
-before `support.js`, so the app boots with no internet. The client holds no
-game logic — reachability, CLI parsing, and win detection all come from the
-server via `/api/*`; the Play/Debrief panels render from the loaded scenario.
-
-### 7. Validator (`src/validator/`) — CI determinism + fairness gate
-
-For each scenario, asserts **SOLVABLE** (fault present → `false`, reference
-solution → `true`, deterministic) and **FAIR**, reporting a verdict of
+For each scenario asserts **SOLVABLE** (fault present → reference solution
+fixes → deterministic) and **FAIR**, reporting a verdict:
 `already-solved | unsolvable | symptom-mismatch | unintended-solution`. The
-"no unintended solution" rule is a documented bounded heuristic (read-only
-investigation must not win; the fix must change state), not an exhaustive
-uniqueness proof. Exits non-zero on any failure.
+"no unintended solution" check is a documented bounded heuristic.
 
-### 8. On-Save Hook (`src/hooks/`)
+### 6. On-Save Hook (`packages/hooks`)
 
-A polling `mtime` watcher over `scenarios/*.json` (no external file-watch
-dependency). On change it re-parses, schema-validates, and runs the same
-solvability check through the shared engine, printing `✓`/`✗` and exiting
-non-zero on failure — suitable for a Kiro on-save trigger and for CI.
-
-### 9. Engine Tests (`src/tests/`)
-
-A zero-dependency harness (`npm test`) exercising the engine primitives
-(utils, reachability conditions, CLI abbreviations) and driving all eight real
-scenarios to lock the fault→condition mapping. Runs in CI before the validator.
+Watches `scenarios/**/*.yaml`; on change it schema-validates, plays the
+reference solution through the shared engine, and reports PASS/FAIL — the same
+check Kiro's on-save hook fires (`.kiro/hooks/on-save-validate.md`).
 
 ## Data Flow
 
-### Player Game Loop
+### Player loop (all client-side)
 ```
-Player types command → client POSTs /api/command
-  → server calls engine.executeCommand(device, cmd)
-  → engine mutates state + re-evaluates the win condition
-  → server returns { output, stateChanged, winCheck, topology }
-  → client appends terminal output, updates ticket/topology
-  → if winCheck.resolved → victory → debrief
+Player types command in xterm → engine.executeCommand(device, cmd)
+  → engine mutates state + re-checks the win condition
+  → React re-renders terminal output + topology
+  → win → debrief overlay
 ```
 
-### Author / Validation Loop
+### Author / validation loop
 ```
-Author edits a scenario JSON → save → on-save hook (or CI validator)
-  → load into engine → assert broken → run reference_solution
-  → assert fixed + fairness checks → report PASS / FAIL <verdict>
+Author edits a scenario YAML → save → Kiro on-save hook (and CI validator)
+  → engine: assert broken → run reference_solution → assert fixed + fairness
+  → PASS / FAIL <verdict>
+The same validateScenario() also runs live in the browser Author Studio.
 ```
 
 ## Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Constraint-based reachability (not packet sim) | Deterministic, fast, provably solvable; each fault maps to exactly one failed condition. |
-| Single shared engine module | Eliminates logic drift between the game, MCP server, and CI — one source of truth. |
-| JSON scenario files | Parsed natively with `JSON.parse`; no YAML dependency; good diffs. |
-| Zero runtime dependencies | The engine is pure TS; the server uses only `node:*`; React + fonts are vendored — the whole app runs offline (NFR-3). |
-| Hand-rolled MCP (no SDK) | Keeps the dependency count at zero and the protocol surface explicit and auditable. |
-| Polling on-save hook (no chokidar) | Small, cross-platform, dependency-free; sufficient for authoring feedback. |
-| TypeScript everywhere, `tsc` only | One language and one build tool across engine, servers, validator, hooks, and tests. |
-
-## Folder Structure
-
-```
-No-Route-to-Host-/
-├── .github/workflows/ci.yml        # build → engine tests → validator (determinism + fairness gate)
-├── .kiro/
-│   ├── specs/                      # requirements.md, design.md, tasks.md
-│   ├── steering/networking-trainer.md
-│   └── hooks/on-save-validate.md
-├── public/vendor/                  # self-hosted React UMD + IBM Plex woff2 + fonts.css
-├── scenarios/                      # 11 JSON scenarios (5 classic + 3 AWS + 3 OS host-firewall)
-├── scripts/vendor-assets.mjs       # regenerates public/vendor/ from pinned devDeps
-├── src/
-│   ├── engine/                     # types, utils, reachability, cli-parser, scenario-loader, index
-│   ├── server/                     # HTTP game server + JSON API
-│   ├── mcp-server/                 # JSON-RPC 2.0 stdio MCP server
-│   ├── validator/                  # CI solvable + fair gate
-│   ├── hooks/                      # on-save polling watcher
-│   ├── tests/                      # zero-dep engine test suite
-│   ├── No Route to Host.dc.html    # web client (served at /)
-│   └── support.js                  # dc-runtime (React-lite template engine)
-├── Dockerfile
-├── package.json                    # tsc build; typescript/react/@fontsource as devDeps only
-└── tsconfig.json
-```
+| Constraint-based reachability (not packet sim) | Deterministic, fast, provably solvable; one fault ↔ one failed condition. |
+| Browser-safe pure engine | The React app runs the whole game client-side — no API, no sessions, no server to break or host. |
+| npm workspaces monorepo | Clear package boundaries; one engine imported everywhere via `tsc -b` project references. |
+| React + Vite + xterm.js | Real, familiar web stack; xterm gives an authentic terminal; Vite bundles everything (zero CDN at runtime). |
+| Official MCP SDK | Spec-compliant, auditable MCP surface for the Kiro agent. |
+| YAML scenarios | Human-readable authoring; parsed once in the engine; good diffs. |
+| TypeScript end to end | One language across engine, web, MCP, validator, and hooks. |

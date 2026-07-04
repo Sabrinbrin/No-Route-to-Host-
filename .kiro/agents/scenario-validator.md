@@ -60,7 +60,7 @@ This agent follows the rules in `.kiro/steering/networking-trainer.md`:
   "mcpServers": {
     "no-route-to-host": {
       "command": "node",
-      "args": ["dist/mcp-server/index.js"],
+      "args": ["packages/mcp-server/dist/index.js"],
       "cwd": "."
     }
   }

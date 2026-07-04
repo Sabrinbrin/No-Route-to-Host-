@@ -1,24 +1,19 @@
-# Stage 1: Build
+# Stage 1: Build the monorepo (engine + web bundle)
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY tsconfig.json package.json ./
-COPY src/ ./src/
+COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
+COPY packages/ ./packages/
 COPY scenarios/ ./scenarios/
-RUN npm install -g typescript && tsc -p tsconfig.json
+RUN npm ci && npm run build
 
-# Stage 2: Runtime
+# Stage 2: Serve the static Vite build (the game runs entirely client-side)
 FROM node:22-alpine
 WORKDIR /app
-COPY --from=builder /app/dist/ ./dist/
-COPY scenarios/ ./scenarios/
-COPY src/support.js ./src/support.js
-COPY "src/No Route to Host.dc.html" "./src/No Route to Host.dc.html"
-COPY src/.thumbnail ./src/.thumbnail
+RUN npm install -g serve
+COPY --from=builder /app/packages/frontend/dist/ ./public/
 
-ENV PORT=3000
-EXPOSE 3000
-
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget -qO- http://localhost:3000/api/scenarios || exit 1
+  CMD wget -qO- http://localhost:8080/ >/dev/null 2>&1 || exit 1
 
-CMD ["node", "dist/server/index.js"]
+CMD ["serve", "-s", "public", "-l", "8080"]

@@ -21,7 +21,7 @@ win condition.
 ## Command
 
 ```bash
-node dist/hooks/index.js {{filePath}}
+node packages/hooks/dist/index.js {{filePath}}
 ```
 
 ## Success criteria

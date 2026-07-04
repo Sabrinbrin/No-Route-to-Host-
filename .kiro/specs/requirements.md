@@ -172,7 +172,7 @@
 |----|-------------|-----------|
 | NFR-1 | Performance | CLI commands respond in < 100ms; reachability evaluation in < 50ms for ≤ 20 devices. |
 | NFR-2 | Browser support | Works in latest Chrome, Firefox, and Safari. |
-| NFR-3 | No external dependencies at runtime | Runs entirely on a local Node HTTP server + the browser. Zero npm runtime dependencies; React and the IBM Plex fonts are self-hosted from `public/vendor/` — no CDN or cloud API is contacted at runtime. |
-| NFR-4 | Single-language stack | Engine, HTTP server, MCP server, validator, and hooks are all TypeScript compiled with `tsc`; the browser client is dependency-free (a small template runtime + inline logic). |
+| NFR-3 | No external dependencies at runtime | The web app is a static Vite build that runs the shared engine client-side — no backend API, no sessions, and no CDN or cloud call at runtime (React and all assets are bundled). |
+| NFR-4 | Single-language stack | Engine, React web app, MCP server, validator, and hooks are all TypeScript, in an npm-workspaces monorepo built with `tsc -b` (engine/tools) and Vite (web). |
 | NFR-5 | Determinism | Given the same scenario and commands, the engine always produces identical results (the engine is pure — no clock, no randomness, no I/O). |
-| NFR-6 | Extensibility | Adding a new scenario requires only a new JSON file under `scenarios/` (and optionally new CLI commands if the scenario needs them); the on-save hook and CI gate validate it automatically. |
+| NFR-6 | Extensibility | Adding a scenario requires only a new YAML file under `scenarios/` (and optionally new CLI commands); the on-save hook and CI gate validate it automatically. The same YAML is bundled into the web app via `import.meta.glob`. |

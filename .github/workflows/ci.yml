@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-validate:
-    name: Build & validate scenarios
+    name: Build, test & validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,32 +20,19 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
+      - name: Install workspaces
         run: npm ci
 
-      - name: Type-check & build
+      - name: Type-check & build (engine + packages + web)
         run: npm run build
 
       - name: Engine unit tests
-        run: node dist/tests/index.js
+        run: node packages/engine/dist/test/index.js
 
-      # Determinism gate: every scenario must go fault -> win=false,
+      # Determinism + fairness gate: every scenario must go fault -> win=false,
       # reference_solution -> win=true, and pass the fairness checks.
-      # A broken, unsolvable, or unfair scenario fails the build.
-      - name: Validate all scenarios
-        run: npm run validate
+      - name: Validate all scenarios (solvable + fair)
+        run: node packages/validator/dist/index.js
 
       - name: MCP server smoke test
-        run: |
-          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-          {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_scenarios","arguments":{}}}' \
-          | node dist/mcp-server/index.js 2>/dev/null \
-          | python3 -c "
-          import sys, json
-          for line in sys.stdin:
-              d = json.loads(line)
-              if d.get('id') == 2:
-                  text = json.loads(d['result']['content'][0]['text'])
-                  assert len(text) >= 8, f'Expected 8+ scenarios, got {len(text)}'
-                  print(f'✓ MCP server returned {len(text)} scenarios')
-          "
+        run: node scripts/smoke-mcp.mjs

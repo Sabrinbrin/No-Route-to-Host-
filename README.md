@@ -34,27 +34,32 @@ Then open a scenario file, break the reference solution, save — the on-save ho
 
 ## Quick Start
 
+An npm-workspaces monorepo. The game is a static React app that runs the
+shared engine **client-side** — no backend needed to play.
+
 ```bash
-# Clone and build
 git clone https://github.com/Sabrinbrin/No-Route-to-Host-.git
 cd No-Route-to-Host-
-tsc -p tsconfig.json
+npm install
 
-# Play the game
-PORT=8080 node dist/server/index.js
-# Open http://localhost:8080
+# Play the game (Vite dev server)
+npm run dev                 # open the printed http://localhost:5173
+
+# Or build once and preview the static bundle
+npm run build && npm run preview   # http://localhost:8080
 
 # Or use Docker
 docker build -t nrth .
-docker run -p 8080:3000 nrth
+docker run -p 8080:8080 nrth
 ```
 
 ### Other commands
 
 ```bash
-node dist/validator/index.js         # Validate all 8 scenarios
-node dist/hooks/index.js --watch     # Watch mode (on-save hook)
-node dist/mcp-server/index.js        # Start MCP server for Kiro agent
+npm test                    # engine unit tests (44)
+npm run validate            # validate all 11 scenarios (solvable + fair)
+npm run watch:scenarios     # on-save hook (re-validates YAML on change)
+npm run mcp                 # MCP server (stdio) for the Kiro agent
 ```
 
 ---
@@ -71,7 +76,7 @@ And for instructors: building fair diagnostic exercises by hand is slow and erro
 
 ---
 
-## 8 Scenarios
+## 11 Scenarios
 
 | # | Title | Domain | Difficulty | Fault |
 |---|-------|--------|-----------|-------|
@@ -83,8 +88,11 @@ And for instructors: building fair diagnostic exercises by hand is slow and erro
 | 6 | EC2 Security Group Blocking | AWS Cloud | ★★★☆☆ | SG missing ICMP rule |
 | 7 | VPC Peering Route Missing | AWS Cloud | ★★★★☆ | Route table has no peering route |
 | 8 | NACL Blocking Traffic | AWS Cloud | ★★★★☆ | NACL missing allow entry |
+| 9 | Linux iptables Blocking Inbound | OS Host | ★★★☆☆ | INPUT chain policy DROP |
+| 10 | Docker Container Unreachable | OS Host | ★★★★☆ | iptables FORWARD blocked |
+| 11 | Windows Firewall Blocking ICMP | OS Host | ★★★☆☆ | No inbound allow rule |
 
-Every scenario is **agent-verified solvable** before it reaches the player.
+Every scenario is **agent-verified solvable & fair** before it reaches the player.
 
 ---
 
@@ -92,24 +100,21 @@ Every scenario is **agent-verified solvable** before it reaches the player.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              Browser (DC Framework)              │
-│  Terminal + Topology + Ticket + Scoring          │
+│         Browser — React + Vite + xterm.js        │
+│  Terminal + Topology + Ticket + Author Studio    │
+│      imports the engine → runs client-side        │
 └──────────────────────┬──────────────────────────┘
-                       │ HTTP JSON API
+                       │  (no backend — static app)
 ┌──────────────────────▼──────────────────────────┐
-│              Game Server (Node.js)               │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│         Shared Network Engine (TypeScript)       │
-│  State Model + Reachability Evaluator + CLI      │
+│      @nrth/engine (pure, browser-safe, TS)       │
+│  State Model + Reachability (7 conds) + CLI       │
 └──────────┬───────────┬───────────┬──────────────┘
            │           │           │
       MCP Server   Validator   On-Save Hook
-      (stdio)      (direct)    (file watcher)
+      (MCP SDK)    (CI gate)   (file watcher)
 ```
 
-**One shared engine** — the game server, MCP server, validator, and hook all import the same module. Zero logic duplication.
+**One shared engine** (`@nrth/engine`) — the web app, MCP server, validator, and hook all import the same package. Zero logic duplication.
 
 ---
 
@@ -117,15 +122,15 @@ Every scenario is **agent-verified solvable** before it reaches the player.
 
 This project demonstrates Kiro's full capability stack working together:
 
-### Self-Built MCP Server
-7 tools over JSON-RPC 2.0 (stdio transport): `get_topology`, `get_ticket`, `run_command`, `check_win_condition`, `reset_scenario`, `load_scenario`, `list_scenarios`.
+### MCP Server (official SDK)
+7 tools on `@modelcontextprotocol/sdk` (stdio transport): `list_scenarios`, `load_scenario`, `get_topology`, `get_ticket`, `run_command`, `check_win_condition`, `reset_scenario`.
 
 ```json
 {
   "mcpServers": {
     "no-route-to-host": {
       "command": "node",
-      "args": ["dist/mcp-server/index.js"],
+      "args": ["packages/mcp-server/dist/index.js"],
       "cwd": "/path/to/No-Route-to-Host-"
     }
   }
@@ -141,7 +146,7 @@ The agent follows `.kiro/steering/networking-trainer.md` to validate scenarios:
 
 ### On-Save Hook
 ```bash
-node dist/hooks/index.js --watch
+npm run watch:scenarios
 # Save a scenario file → instant validation feedback
 # ✓ Wrong Access VLAN (wrong-access-vlan) — Solvable in 4 steps.
 # ✗ Broken Scenario (broken) — FAIL: Reference solution does not fix it.
@@ -192,27 +197,28 @@ See existing scenarios for the schema. Each scenario disables exactly **one** re
 │   │   └── networking-trainer.md
 │   └── hooks/           # On-save hook configuration
 │       └── on-save-validate.md
-├── scenarios/           # 8 scenario data files (JSON)
-├── src/
-│   ├── engine/          # Shared network simulation engine
-│   ├── mcp-server/      # MCP server (stdio, JSON-RPC 2.0)
-│   ├── server/          # HTTP game server
-│   ├── validator/       # Scenario validation script
-│   └── hooks/           # On-save file watcher
-├── Dockerfile           # One-command deployment
-├── package.json
-└── tsconfig.json
+├── scenarios/           # 11 scenario data files (YAML)
+├── packages/
+│   ├── engine/          # @nrth/engine — shared engine (pure, browser-safe) + tests
+│   ├── frontend/        # React + Vite + xterm.js web app (client-side engine)
+│   ├── mcp-server/      # MCP server on @modelcontextprotocol/sdk (stdio)
+│   ├── validator/       # CI solvable + fair gate
+│   └── hooks/           # On-save YAML scenario watcher
+├── Dockerfile           # Builds the web app, serves the static bundle
+├── package.json         # npm workspaces
+├── tsconfig.base.json
+└── tsconfig.json        # solution (project references)
 ```
 
 ---
 
 ## Tech Stack
 
-- **TypeScript** end-to-end (zero external npm dependencies)
-- **Node.js** HTTP server + MCP stdio server
-- **DC Framework** for the frontend (custom reactive UI)
-- **JSON** scenario data format
-- **MCP Protocol** (JSON-RPC 2.0 over stdio)
+- **TypeScript** end-to-end, in an **npm-workspaces monorepo**
+- **React 18 + Vite + xterm.js** web app — runs the engine client-side (no backend)
+- **@nrth/engine** — pure, deterministic, browser-safe simulation engine
+- **@modelcontextprotocol/sdk** — the MCP server (stdio)
+- **YAML** scenario data (`js-yaml`)
 - **Docker** for deployment
 
 ---

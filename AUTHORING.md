@@ -11,7 +11,10 @@ How to create new diagnostic scenarios for No Route to Host.
 
 ## Scenario Schema
 
-Each scenario is a JSON file in `scenarios/` with this structure:
+Scenarios are **YAML** files (`scenarios/*.yaml`). The examples below are shown
+as JSON for clarity — YAML is a superset of JSON, so the same field structure
+applies (copy an existing `.yaml` as your starting point). Each scenario has
+this structure:
 
 ```json
 {
@@ -191,12 +194,12 @@ Your fault should disable **exactly one** condition. The fix should re-enable ex
 
 Run manually:
 ```bash
-node dist/hooks/index.js scenarios/your-new-scenario.json
+node packages/hooks/dist/index.js scenarios/your-new-scenario.yaml
 ```
 
 Or use watch mode:
 ```bash
-node dist/hooks/index.js --watch
+npm run watch:scenarios
 ```
 
 ## Example: Creating a New Scenario

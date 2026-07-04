@@ -110,7 +110,7 @@ Adding a device type means adding state fields and condition(s) — never a forw
   "mcpServers": {
     "no-route-to-host": {
       "command": "node",
-      "args": ["dist/mcp-server/index.js"],
+      "args": ["packages/mcp-server/dist/index.js"],
       "cwd": "<project-root>"
     }
   }
