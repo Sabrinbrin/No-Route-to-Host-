@@ -3,5 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
-  "dependencies": { "@nrth/engine": "*" }
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@nrth/engine": "*",
+    "zod": "^4.4.3"
+  }
 }
