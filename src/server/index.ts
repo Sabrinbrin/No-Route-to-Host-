@@ -154,17 +154,42 @@ const server = createServer((req, res) => {
   // API endpoints
   if (url.startsWith('/api/') && req.method === 'POST') {
     let body = '';
-    req.on('data', (chunk: any) => { body += chunk; });
+    let bodySize = 0;
+    const MAX_BODY = 1024 * 64; // 64KB limit
+
+    req.on('data', (chunk: any) => {
+      bodySize += chunk.length;
+      if (bodySize > MAX_BODY) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Request body too large (max 64KB)' }));
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
+      if (bodySize > MAX_BODY) return; // already responded
+
+      let parsed: any;
       try {
-        const parsed = body ? JSON.parse(body) : {};
+        parsed = body ? JSON.parse(body) : {};
+      } catch (e: any) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON: ' + (e.message || 'parse error') }));
+        return;
+      }
+
+      try {
         const result = handleApi(url, parsed);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (e: any) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: e.message }));
+        res.end(JSON.stringify({ error: 'Internal server error: ' + (e.message || 'unknown') }));
       }
+    });
+    req.on('error', () => {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Request error' }));
     });
     return;
   }
@@ -174,6 +199,24 @@ const server = createServer((req, res) => {
     const result = handleApi('/api/scenarios', {});
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result));
+    return;
+  }
+
+  // Health check endpoint
+  if (url === '/health' || url === '/api/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'ok',
+      scenarios: availableScenarios.size,
+      uptime: Math.floor(process.uptime ? process.uptime() : 0),
+    }));
+    return;
+  }
+
+  // Reject non-GET methods for static files
+  if (req.method !== 'GET' && !url.startsWith('/api/')) {
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
     return;
   }
 

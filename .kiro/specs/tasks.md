@@ -1,176 +1,165 @@
 # Tasks — No Route to Host
 
-## Phase 1: Foundation (Engine + First Scenario Playable)
+## Phase 1: Foundation (Engine + First Scenario Playable) ✅
 
-### Task 1.1: Project Scaffolding
-- [ ] Initialize npm workspace root with `package.json` (workspaces: `packages/*`)
-- [ ] Create `tsconfig.base.json` with shared compiler options
-- [ ] Create `packages/engine/` with package.json and tsconfig.json
-- [ ] Create `packages/frontend/` with Vite + React setup
-- [ ] Create `packages/mcp-server/` with package.json
-- [ ] Create `packages/validator/` with package.json
-- [ ] Create `packages/hooks/` with package.json
-- [ ] Create `scenarios/` directory
-- [ ] Update `.gitignore` for Node.js/TypeScript project
+### Task 1.1: Project Scaffolding ✅
+- [x] Initialize project with `package.json` and `tsconfig.json`
+- [x] Create `src/engine/` for the shared simulation engine
+- [x] Create `src/mcp-server/` for the MCP server
+- [x] Create `src/server/` for the HTTP game server
+- [x] Create `src/validator/` for scenario validation
+- [x] Create `src/hooks/` for on-save automation
+- [x] Create `scenarios/` directory for scenario data
+- [x] Update `.gitignore` for TypeScript project
 
-### Task 1.2: Engine — State Model
-- [ ] Define TypeScript interfaces: `NetworkState`, `Device`, `Interface`, `RoutingConfig`, `StaticRoute`, `SVI`, `Link`, `FirewallPolicy`, `NatRule`
-- [ ] Implement `createInitialState(scenario)` — builds state from scenario data
-- [ ] Implement `applyFault(state, fault)` — applies the injected fault to create the broken state
-- [ ] Export all types and functions
+### Task 1.2: Engine — State Model ✅
+- [x] Define TypeScript interfaces: `NetworkState`, `Device`, `Interface`, `RoutingConfig`, `StaticRoute`, `SVI`, `Link`, `FirewallPolicy`, `NatRule`
+- [x] Define AWS cloud types: `SecurityGroup`, `NACL`, `RouteTable`, `VPCPeering`, `AWSConfig`
+- [x] Implement `loadScenario(scenario)` — builds broken state from scenario data
+- [x] Implement fault injection via `injected_fault` field
+- [x] Export all types and functions
 
-### Task 1.3: Engine — Reachability Evaluator
-- [ ] Implement `evaluatePing(state, sourceDevice, destIP)` with 5-condition chain
-- [ ] Condition 1: Validate source host has IP/mask/gateway
-- [ ] Condition 2: Validate source access VLAN has valid L2 path
-- [ ] Condition 3: Validate trunk carries the required VLAN
-- [ ] Condition 4: Validate L3 routing (enabled, SVI up, route exists)
-- [ ] Condition 5: Validate firewall policy permits traffic
-- [ ] Return `PingResult` with success/failure and reason
-- [ ] Implement helper: `findPath(state, srcDevice, dstIP)` — determines L2/L3 path
+### Task 1.3: Engine — Reachability Evaluator ✅
+- [x] Implement `evaluatePing(state, sourceDevice, destIP)` with ordered condition chain
+- [x] Condition 1: Validate source host has IP/mask/gateway
+- [x] Condition 2: Validate source access VLAN has valid L2 path
+- [x] Condition 3: Validate trunk carries the required VLAN
+- [x] Condition 4: Validate L3 routing (enabled, SVI up, route exists)
+- [x] Condition 5: Validate firewall policy permits traffic
+- [x] Condition 6: Validate AWS security groups, NACLs, and route tables
+- [x] Return `PingResult` with success/failure and reason
+- [x] Handle direct router/firewall/EC2 connections (no VLAN needed)
 
-### Task 1.4: Engine — CLI Parser
-- [ ] Implement command mode state machine (exec → config → config-if)
-- [ ] Implement `show interfaces` — format interface table output
-- [ ] Implement `show ip route` — format routing table
-- [ ] Implement `show vlan brief` — format VLAN table
-- [ ] Implement `show running-config` — format full config
-- [ ] Implement `show ip int brief` — brief IP summary
-- [ ] Implement `ping <ip>` — calls reachability evaluator
-- [ ] Implement `configure terminal` — mode transition
-- [ ] Implement `interface <name>` — mode transition
-- [ ] Implement `switchport access vlan <id>` — state mutation
-- [ ] Implement `switchport trunk allowed vlan add <id>` — state mutation
-- [ ] Implement `ip routing` — state mutation
-- [ ] Implement `no shutdown` / `shutdown` — state mutation
-- [ ] Implement `ip route <net> <mask> <nh>` — state mutation
-- [ ] Implement `set firewall policy` — state mutation
-- [ ] Implement `end` / `exit` — mode transitions
-- [ ] Handle unknown commands with help text
+### Task 1.4: Engine — CLI Parser ✅
+- [x] Implement IOS-style command abbreviation (`abbr()` helper)
+- [x] Implement `show interfaces` / `show ip route` / `show vlan brief` / `show running-config`
+- [x] Implement `show ip int brief` / `show firewall`
+- [x] Implement `ping <ip>` — calls reachability evaluator
+- [x] Implement `configure terminal` (+ `conf t` shortform)
+- [x] Implement `interface <name>` (+ `int` shortform)
+- [x] Implement `switchport access vlan <id>` (+ `sw acc vlan` shortform)
+- [x] Implement `switchport trunk allowed vlan add <id>`
+- [x] Implement `ip routing` / `ip route <net> <mask> <nh>`
+- [x] Implement `no shutdown` / `shutdown` (+ `no shut` shortform)
+- [x] Implement `set firewall policy` — state mutation
+- [x] Implement AWS CLI: `aws ec2 describe-security-groups`, `authorize-security-group-ingress/egress`
+- [x] Implement AWS CLI: `aws ec2 create-route`, `replace-route`, `create-network-acl-entry`
+- [x] Implement `end` / `exit` — mode transitions
+- [x] Handle unknown commands with help text
 
-### Task 1.5: Engine — Scenario Loader
-- [ ] Implement YAML parser for scenario format
-- [ ] Validate scenario schema (required fields present)
-- [ ] Build `NetworkState` from `topology` field
-- [ ] Apply `injected_fault` to produce broken initial state
-- [ ] Implement `checkWinCondition(state, winCondition)` — evaluates win assertion
+### Task 1.5: Engine — Scenario Loader ✅
+- [x] Implement JSON parser for scenario format
+- [x] Validate scenario schema (required fields present)
+- [x] Build `NetworkState` from `topology` field
+- [x] Apply `injected_fault` to produce broken initial state
+- [x] Implement `checkWinCondition(state, winCondition)` — evaluates win assertion
 
-### Task 1.6: Scenario 1 — Wrong Access VLAN
-- [ ] Author `scenarios/01-wrong-access-vlan.yaml` with full topology, fault, ticket, win condition, and reference solution
-- [ ] Verify manually: loading + running reference solution triggers win
+### Task 1.6: Scenarios 1–5 (Traditional Networking) ✅
+- [x] Scenario 1: Wrong Access VLAN — verified solvable in 4 steps
+- [x] Scenario 2: Trunk Allowed-List Gap — verified solvable in 4 steps
+- [x] Scenario 3: Inter-VLAN Routing Down — verified solvable in 4 steps
+- [x] Scenario 4: Missing Default Route — verified solvable in 3 steps
+- [x] Scenario 5: Firewall Tunnel Blackhole — verified solvable in 3 steps
 
----
-
-## Phase 2: Web Frontend (Playable in Browser)
-
-### Task 2.1: Frontend Shell
-- [ ] Set up Vite + React 18 with TypeScript
-- [ ] Create `App.tsx` with split layout (terminal + topology + ticket panel)
-- [ ] Create `GameContext` providing engine state to all components
-- [ ] Implement scenario selection screen (list scenarios from bundled data)
-
-### Task 2.2: Terminal Component
-- [ ] Integrate xterm.js
-- [ ] Implement device-selection prompt (e.g., `SW1#`)
-- [ ] Route typed commands to engine `executeCommand()`
-- [ ] Display command output in terminal
-- [ ] Implement command history (up/down arrows)
-- [ ] Support `connect <device>` to switch target device
-
-### Task 2.3: Topology Diagram
-- [ ] Render devices as labeled SVG nodes (positioned from layout data)
-- [ ] Render links as SVG edges between device nodes
-- [ ] Color edges based on reachability status (red/green)
-- [ ] Animate color transitions on state change (CSS transition, 500ms)
-- [ ] Show device hostname; tooltip on hover with interface details
-
-### Task 2.4: Ticket & Score UI
-- [ ] Display ticket panel: title, symptom, affected hosts
-- [ ] Display running timer (elapsed seconds)
-- [ ] Display command counter
-- [ ] Implement victory overlay: "Ticket Resolved!" + final score + grade
-- [ ] Implement restart and scenario-select buttons
+### Task 1.7: Scenarios 6–8 (AWS Cloud Networking) ✅
+- [x] Scenario 6: EC2 Security Group Blocking ICMP — verified solvable in 1 step
+- [x] Scenario 7: VPC Route Table Missing Peering Route — verified solvable in 1 step
+- [x] Scenario 8: NACL Blocking Return Traffic — verified solvable in 1 step
 
 ---
 
-## Phase 3: Remaining Scenarios
+## Phase 2: MCP Server + Validation ✅
 
-### Task 3.1: Scenario 2 — Trunk Allowed-List Gap
-- [ ] Author `scenarios/02-trunk-allowed-list.yaml`
-- [ ] Topology: two switches with trunk link, VLAN 30 hosts on both
-- [ ] Fault: trunk allowed-list omits VLAN 30
-- [ ] Win: cross-switch VLAN 30 ping succeeds
+### Task 2.1: MCP Server Implementation ✅
+- [x] Implement JSON-RPC 2.0 protocol over stdio transport
+- [x] Import shared engine (single source of truth)
+- [x] Implement `get_topology` tool
+- [x] Implement `get_ticket` tool
+- [x] Implement `run_command` tool
+- [x] Implement `check_win_condition` tool
+- [x] Implement `reset_scenario` tool
+- [x] Implement `load_scenario` tool
+- [x] Implement `list_scenarios` tool
+- [x] Tested end-to-end: load → detect fault → fix → confirm resolution
 
-### Task 3.2: Scenario 3 — Inter-VLAN Routing Down
-- [ ] Author `scenarios/03-inter-vlan-routing.yaml`
-- [ ] Topology: L3 switch with VLAN 10 and 20 SVIs
-- [ ] Fault: `ip routing` disabled or SVI shut
-- [ ] Win: cross-VLAN ping succeeds
+### Task 2.2: Validation Agent ✅
+- [x] Implement validation flow: load → assert broken → run solution → assert fixed
+- [x] Verify initial state is broken (`check_win_condition()` → false)
+- [x] Execute `reference_solution` commands via engine
+- [x] Assert `check_win_condition()` → true after fix
+- [x] Implement detailed reporting (pass/fail with reasons)
+- [x] Run against all 8 scenarios — all pass
 
-### Task 3.3: Scenario 4 — Missing Default Route
-- [ ] Author `scenarios/04-missing-default-route.yaml`
-- [ ] Topology: internal switch/router + upstream next-hop + external test host
-- [ ] Fault: no default route or wrong next-hop
-- [ ] Win: internal host pings external test IP
+### Task 2.3: Steering File ✅
+- [x] Create `.kiro/steering/networking-trainer.md` with `inclusion: always`
+- [x] Document architecture invariants (constraint-based, no packet sim)
+- [x] Document CLI grammar rules and abbreviation conventions
+- [x] Document validation definitions (SOLVABLE + FAIR criteria)
+- [x] Document agent behaviour rules (never edit engine, report failures)
+- [x] Document MCP tool contracts and configuration
 
-### Task 3.4: Scenario 5 — Firewall Tunnel Blackhole
-- [ ] Author `scenarios/05-firewall-tunnel.yaml`
-- [ ] Topology: two sites connected via IPsec tunnel (firewall device)
-- [ ] Fault: missing permit policy for tunnel subnets (or missing static route to remote via tunnel interface)
-- [ ] Win: cross-tunnel ping succeeds
-
----
-
-## Phase 4: MCP Server + Validation
-
-### Task 4.1: MCP Server Implementation
-- [ ] Set up `@modelcontextprotocol/sdk` with stdio transport
-- [ ] Import shared engine
-- [ ] Implement `get_topology` tool
-- [ ] Implement `get_ticket` tool
-- [ ] Implement `run_command` tool
-- [ ] Implement `check_win_condition` tool
-- [ ] Implement `reset_scenario` tool
-- [ ] Implement `load_scenario` tool
-- [ ] Build and verify server starts
-
-### Task 4.2: Validation Agent
-- [ ] Create validation script that connects to MCP server (or uses engine directly)
-- [ ] Implement validation flow: load → assert broken → run solution → assert fixed
-- [ ] Implement detailed reporting (step-by-step output, pass/fail with reasons)
-- [ ] Run against all 5 scenarios and confirm all pass
-
-### Task 4.3: Steering File
-- [ ] Create `.kiro/steering/validation-agent.md` with:
-  - CLI grammar rules (what commands are valid)
-  - Definition of "solvable" (fault present + reference solution fixes it)
-  - Reporting format conventions
-  - Scenario file schema expectations
-
-### Task 4.4: On-Save Hook
-- [ ] Implement file watcher using chokidar on `scenarios/*.yaml`
-- [ ] On change: parse YAML, validate schema, run validation
-- [ ] Format output: ✓/✗ with scenario name and details
-- [ ] Exit code: 0 = pass, 1 = fail
-- [ ] Add npm script: `npm run watch:scenarios`
+### Task 2.4: On-Save Hook ✅
+- [x] Implement file watcher on `scenarios/*.json`
+- [x] On change: parse JSON, validate schema, run validation
+- [x] Format output: ✓/✗ with scenario name and details
+- [x] Exit code: 0 = pass, 1 = fail (CI-compatible)
+- [x] Support modes: validate-all, single-file, --watch
+- [x] Tested: catches intentionally broken scenarios
 
 ---
 
-## Phase 5: Polish & Integration
+## Phase 3: Web Frontend ✅
 
-### Task 5.1: End-to-End Verification
-- [ ] Run all 5 scenarios through the game (manual play path)
-- [ ] Run all 5 scenarios through the validator
-- [ ] Verify MCP server handles all tools correctly
-- [ ] Verify on-save hook catches intentionally broken scenario
+### Task 3.1: Game Server ✅
+- [x] HTTP server with JSON API + static file serving
+- [x] API endpoints: /api/scenarios, /api/load, /api/command, /api/check, /api/reset, /api/state
+- [x] Support PORT env variable for flexible deployment
+- [x] CORS headers for cross-origin access
+- [x] Serve DC HTML UI at root `/`
 
-### Task 5.2: Documentation
-- [ ] Update README.md with project overview, setup instructions, and usage
-- [ ] Document how to add new scenarios
-- [ ] Document MCP server tool API
+### Task 3.2: Frontend UI (DC Framework) ✅
+- [x] Landing page with project pitch and feature highlights
+- [x] Scenario dashboard with all 8 scenarios, difficulty ratings
+- [x] Play screen: terminal + topology diagram + ticket panel
+- [x] Terminal with command input, history, and coloured output
+- [x] Real-time prompt updates reflecting CLI mode (exec/config/config-if)
+- [x] Live MCP status indicator (green/red dot, polls every 10s)
+- [x] Victory/debrief screen with efficiency scoring (grade A–D)
+- [x] Author studio with YAML editor and animated validation agent
+- [x] Hints system with escalating cost
+- [x] Timer and command counter
 
-### Task 5.3: Build & Package
-- [ ] Ensure `npm run build` builds all packages
-- [ ] Ensure `npm run dev` starts frontend in dev mode
-- [ ] Ensure `npm run validate` runs all scenario validations
-- [ ] Ensure `npm run mcp` starts the MCP server
+### Task 3.3: Backend Wiring ✅
+- [x] All terminal commands routed to `POST /api/command` (real engine)
+- [x] Scenario loading via `POST /api/load`
+- [x] Win condition checked automatically after state changes
+- [x] Reset via `POST /api/reset`
+- [x] Dashboard fetches real scenario list from `GET /api/scenarios`
+
+---
+
+## Phase 4: Polish & Deployment ✅
+
+### Task 4.1: Dockerfile ✅
+- [x] Multi-stage build: TypeScript compile → minimal Node.js runtime
+- [x] Expose port 3000
+- [x] One-command start: `docker build -t nrth . && docker run -p 8080:3000 nrth`
+
+### Task 4.2: Error Handling ✅
+- [x] Server gracefully handles malformed JSON
+- [x] Server returns proper error responses for unknown endpoints
+- [x] CLI parser returns helpful messages for unknown commands
+- [x] Scenario loader validates schema before loading
+
+### Task 4.3: Documentation ✅
+- [x] README with compelling pitch, quick start, architecture, scenario table
+- [x] MCP configuration documented
+- [x] How to add new scenarios documented
+- [x] Demo script for hackathon presentation
+
+### Task 4.4: End-to-End Verification ✅
+- [x] All 8 scenarios pass validation
+- [x] MCP server handles all tools correctly
+- [x] HTTP server serves game and API
+- [x] On-save hook catches broken scenarios
+- [x] IOS abbreviations work (sh ip int bri, conf t, sw acc vlan, etc.)
