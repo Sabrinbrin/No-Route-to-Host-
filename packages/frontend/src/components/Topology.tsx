@@ -40,7 +40,7 @@ function computeLayout(devices: Device[], links: Link[]): Map<string, Pos> {
   return positions;
 }
 
-export function Topology({ network, solved }: { network: NetworkState; solved: boolean }) {
+export function Topology({ network, solved, activeDevice, onDevice }: { network: NetworkState; solved: boolean; activeDevice?: string; onDevice?: (id: string) => void }) {
   const { devices, links } = network;
   const positions = computeLayout(devices, links);
 
@@ -98,24 +98,25 @@ export function Topology({ network, solved }: { network: NetworkState; solved: b
             const pos = positions.get(d.id);
             if (!pos) return null;
             const ip = d.interfaces.find(i => i.ip)?.ip || d.routing.svis?.[0]?.ip || '';
+            const isActive = d.id === activeDevice;
             return (
-              <g key={d.id}>
-                {/* Device circle/box */}
+              <g key={d.id} onClick={() => onDevice?.(d.id)} style={{ cursor: onDevice ? 'pointer' : 'default' }}>
+                {/* Device circle */}
                 <circle
                   cx={pos.x}
                   cy={pos.y}
                   r={16}
-                  fill="#161b22"
-                  stroke={solved ? 'var(--green)' : '#30363d'}
-                  strokeWidth={1.5}
-                  style={{ transition: 'stroke 0.5s ease' }}
+                  fill={isActive ? 'rgba(88,166,255,.15)' : '#161b22'}
+                  stroke={isActive ? '#58a6ff' : solved ? 'var(--green)' : '#30363d'}
+                  strokeWidth={isActive ? 2.5 : 1.5}
+                  style={{ transition: 'stroke 0.3s ease, fill 0.3s ease' }}
                 />
                 {/* Icon */}
                 <text x={pos.x} y={pos.y + 5} textAnchor="middle" fontSize={14}>
                   {ICON[d.type] ?? '📦'}
                 </text>
                 {/* Hostname label */}
-                <text x={pos.x} y={pos.y + 30} textAnchor="middle" fontSize={9} fontWeight={600} fill="#e6edf3" fontFamily="var(--mono)">
+                <text x={pos.x} y={pos.y + 30} textAnchor="middle" fontSize={9} fontWeight={isActive ? 700 : 600} fill={isActive ? '#58a6ff' : '#e6edf3'} fontFamily="var(--mono)">
                   {d.hostname}
                 </text>
                 {/* IP label */}
@@ -136,7 +137,7 @@ export function Topology({ network, solved }: { network: NetworkState; solved: b
           <span style={{ width: 16, height: 2, background: solved ? 'var(--green)' : '#f5a623', display: 'inline-block', borderRadius: 1 }} />
           {solved ? 'healthy' : 'under investigation'}
         </span>
-        <span>{links.length} links · {devices.length} devices</span>
+        <span>Click a device to open its terminal</span>
       </div>
     </div>
   );
