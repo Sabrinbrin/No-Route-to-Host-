@@ -105,6 +105,8 @@ function evaluatePing(state: NetworkState, src: string, dstIp: string): PingResu
 6. AWS cloud: the VPC route table has an active route, the security group
    allows the traffic (stateful), and the NACL allows it (stateless, both
    directions).
+7. Host firewall: OS-level filtering permits the traffic (Linux `iptables`
+   INPUT/FORWARD chains, Docker, or Windows Firewall inbound rules).
 
 Each scenario's fault disables **exactly one** condition; `failedCondition`
 reports which. This mapping is locked by the engine test suite.
@@ -257,7 +259,7 @@ No-Route-to-Host-/
 │   ├── steering/networking-trainer.md
 │   └── hooks/on-save-validate.md
 ├── public/vendor/                  # self-hosted React UMD + IBM Plex woff2 + fonts.css
-├── scenarios/                      # 8 JSON scenarios (5 classic + 3 AWS)
+├── scenarios/                      # 11 JSON scenarios (5 classic + 3 AWS + 3 OS host-firewall)
 ├── scripts/vendor-assets.mjs       # regenerates public/vendor/ from pinned devDeps
 ├── src/
 │   ├── engine/                     # types, utils, reachability, cli-parser, scenario-loader, index

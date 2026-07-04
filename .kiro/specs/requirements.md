@@ -82,7 +82,8 @@
 4. **Condition 4 — L3 routing:** If source and destination are in different subnets, routing must be enabled, relevant SVIs/interfaces must be up, and a route to the destination subnet must exist. Failure → "Routing disabled," "SVI down," or "No route to destination."
 5. **Condition 5 — Firewall policy:** If the path crosses a firewall, a policy must permit src→dst traffic, and any required NAT must be configured. Failure → "Blocked by firewall policy" or "NAT misconfigured."
 6. **Condition 6 — AWS cloud path:** For `ec2` / `vpc-router` devices, the VPC route table must have an active route to the destination, the security group must allow the traffic (stateful), and the NACL must allow it (stateless, evaluated in both directions). Failure → "No route in route table," "Blocked by security group," or "Blocked by NACL."
-7. Each scenario's injected fault disables exactly ONE condition; fixing that condition satisfies the win condition.
+7. **Condition 7 — Host firewall:** For OS-level hosts (Linux `iptables`, Docker, Windows Firewall), the host's local firewall must permit the traffic — the relevant chain policy/rule (e.g. iptables `INPUT`/`FORWARD`, a Windows inbound rule) must allow it. Failure → "Blocked by iptables," "INPUT/FORWARD chain policy is DROP," or "Blocked by Windows Firewall."
+8. Each scenario's injected fault disables exactly ONE condition; fixing that condition satisfies the win condition.
 
 ---
 
@@ -93,7 +94,7 @@
 **so that** new scenarios can be added without code changes.
 
 **Acceptance Criteria:**
-1. Scenarios are defined in JSON files under `scenarios/` (eight ship today: five switching/routing/firewall + three AWS cloud).
+1. Scenarios are defined in JSON files under `scenarios/` (eleven ship today: five switching/routing/firewall, three AWS cloud, and three OS-level host firewall — Linux iptables, Docker, Windows).
 2. Each scenario file contains: `id`, `title`, `difficulty`, `topology` (devices + links), `injected_fault`, `ticket`, `win_condition`, and `reference_solution`.
 3. The `topology` field defines devices (with interfaces, routing config, firewall policies) and links between interfaces.
 4. The `injected_fault` field specifies the state delta applied at load (what breaks the network).

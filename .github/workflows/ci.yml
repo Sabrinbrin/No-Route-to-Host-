@@ -34,3 +34,18 @@ jobs:
       # A broken, unsolvable, or unfair scenario fails the build.
       - name: Validate all scenarios
         run: npm run validate
+
+      - name: MCP server smoke test
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+          {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_scenarios","arguments":{}}}' \
+          | node dist/mcp-server/index.js 2>/dev/null \
+          | python3 -c "
+          import sys, json
+          for line in sys.stdin:
+              d = json.loads(line)
+              if d.get('id') == 2:
+                  text = json.loads(d['result']['content'][0]['text'])
+                  assert len(text) >= 8, f'Expected 8+ scenarios, got {len(text)}'
+                  print(f'✓ MCP server returned {len(text)} scenarios')
+          "

@@ -23,6 +23,9 @@ const EXPECTED_CONDITION: Record<string, number> = {
   'aws-security-group': 6,
   'aws-route-table': 6,
   'aws-nacl-deny': 6,
+  'linux-iptables': 7,
+  'docker-networking': 7,
+  'windows-firewall': 7,
 };
 
 function loadScenarioFile(file: string): Scenario {
@@ -39,8 +42,12 @@ function runReferenceSolution(scenario: Scenario, game: ReturnType<typeof loadSc
   }
 }
 
-test('all 8 scenario files are present', () => {
-  assertEqual(files.length, 8, 'expected 8 scenarios');
+test('every known scenario file is present and loads', () => {
+  const ids = files.map(f => loadScenarioFile(f).id);
+  for (const known of Object.keys(EXPECTED_CONDITION)) {
+    assert(ids.includes(known), `expected scenario '${known}' to be present`);
+  }
+  assert(files.length >= Object.keys(EXPECTED_CONDITION).length, 'at least the known scenarios must exist');
 });
 
 for (const file of files) {
