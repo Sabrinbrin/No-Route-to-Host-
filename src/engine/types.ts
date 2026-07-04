@@ -8,12 +8,13 @@ export interface NetworkState {
 export interface Device {
   id: string;
   hostname: string;
-  type: 'switch' | 'router' | 'firewall' | 'host' | 'ec2' | 'vpc-router';
+  type: 'switch' | 'router' | 'firewall' | 'host' | 'ec2' | 'vpc-router' | 'linux-server' | 'windows-server' | 'docker-host';
   interfaces: NetworkInterface[];
   routing: RoutingConfig;
   firewallPolicies?: FirewallPolicy[];
   natRules?: NatRule[];
   aws?: AWSConfig;
+  os?: OSConfig;
 }
 
 export interface NetworkInterface {
@@ -132,6 +133,88 @@ export interface AWSConfig {
   vpc?: string;
   subnet?: string;
   availabilityZone?: string;
+}
+
+// ===== OS-Level Networking (Linux / Windows) =====
+
+export interface OSConfig {
+  type: 'linux' | 'windows';
+  iptables?: IptablesConfig;
+  windowsFirewall?: WindowsFirewallConfig;
+  dns?: DNSConfig;
+  services?: ServiceConfig[];
+  hostsFile?: HostsEntry[];
+}
+
+export interface IptablesConfig {
+  chains: IptablesChain[];
+}
+
+export interface IptablesChain {
+  name: string;              // INPUT, OUTPUT, FORWARD
+  policy: 'ACCEPT' | 'DROP';
+  rules: IptablesRule[];
+}
+
+export interface IptablesRule {
+  num: number;
+  protocol: 'tcp' | 'udp' | 'icmp' | 'all';
+  source: string;            // CIDR or 0.0.0.0/0
+  destination: string;       // CIDR or 0.0.0.0/0
+  dport?: string;            // destination port
+  sport?: string;            // source port
+  action: 'ACCEPT' | 'DROP' | 'REJECT';
+  state?: string;            // ESTABLISHED,RELATED etc.
+}
+
+export interface WindowsFirewallConfig {
+  profiles: WFProfile[];
+  rules: WFRule[];
+}
+
+export interface WFProfile {
+  name: 'Domain' | 'Private' | 'Public';
+  enabled: boolean;
+  defaultInbound: 'Allow' | 'Block';
+  defaultOutbound: 'Allow' | 'Block';
+}
+
+export interface WFRule {
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  direction: 'Inbound' | 'Outbound';
+  action: 'Allow' | 'Block';
+  protocol: 'TCP' | 'UDP' | 'ICMPv4' | 'Any';
+  localPort?: string;
+  remotePort?: string;
+  remoteAddress?: string;
+  profile?: string;
+}
+
+export interface DNSConfig {
+  nameservers: string[];
+  searchDomains?: string[];
+  resolves: DNSRecord[];     // simulated DNS records
+}
+
+export interface DNSRecord {
+  name: string;              // hostname to resolve
+  type: 'A' | 'CNAME' | 'PTR';
+  value: string;             // IP or alias
+}
+
+export interface ServiceConfig {
+  name: string;
+  status: 'running' | 'stopped' | 'failed';
+  enabled: boolean;
+  port?: number;
+  protocol?: 'tcp' | 'udp';
+}
+
+export interface HostsEntry {
+  ip: string;
+  hostname: string;
 }
 
 // ===== Ping / Reachability =====
