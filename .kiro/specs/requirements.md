@@ -81,7 +81,8 @@
 3. **Condition 3 — Trunk carries VLAN:** If the path crosses a trunk, the destination VLAN must be in the trunk's allowed list. Failure → "VLAN not allowed on trunk."
 4. **Condition 4 — L3 routing:** If source and destination are in different subnets, routing must be enabled, relevant SVIs/interfaces must be up, and a route to the destination subnet must exist. Failure → "Routing disabled," "SVI down," or "No route to destination."
 5. **Condition 5 — Firewall policy:** If the path crosses a firewall, a policy must permit src→dst traffic, and any required NAT must be configured. Failure → "Blocked by firewall policy" or "NAT misconfigured."
-6. Each scenario's injected fault disables exactly ONE condition; fixing that condition satisfies the win condition.
+6. **Condition 6 — AWS cloud path:** For `ec2` / `vpc-router` devices, the VPC route table must have an active route to the destination, the security group must allow the traffic (stateful), and the NACL must allow it (stateless, evaluated in both directions). Failure → "No route in route table," "Blocked by security group," or "Blocked by NACL."
+7. Each scenario's injected fault disables exactly ONE condition; fixing that condition satisfies the win condition.
 
 ---
 
@@ -92,7 +93,7 @@
 **so that** new scenarios can be added without code changes.
 
 **Acceptance Criteria:**
-1. Scenarios are defined in YAML files under `scenarios/`.
+1. Scenarios are defined in JSON files under `scenarios/` (eight ship today: five switching/routing/firewall + three AWS cloud).
 2. Each scenario file contains: `id`, `title`, `difficulty`, `topology` (devices + links), `injected_fault`, `ticket`, `win_condition`, and `reference_solution`.
 3. The `topology` field defines devices (with interfaces, routing config, firewall policies) and links between interfaces.
 4. The `injected_fault` field specifies the state delta applied at load (what breaks the network).
@@ -131,8 +132,8 @@
 3. After executing all steps, it calls `check_win_condition()`.
 4. **Pass:** win condition returns `resolved: true`.
 5. **Fail:** win condition returns `resolved: false` — agent reports which step failed and why.
-6. The agent also verifies: (a) the fault is actually present at start (initial `check_win_condition()` returns false), and (b) the ticket symptom text references the correct failure condition.
-7. Results are reported as structured output (pass/fail + details).
+6. The agent also verifies the scenario is **fair**, reporting one of the verdicts `already-solved` | `unsolvable` | `symptom-mismatch` | `unintended-solution`: (a) the fault is present at start (initial `check_win_condition()` returns false); (b) the ticket has a symptom and the win-condition source is one of its `affected_hosts`; (c) read-only investigation does not resolve the win; and (d) the fix is deterministic.
+7. Results are reported as structured output (pass/fail + verdict + details).
 
 ---
 
@@ -143,7 +144,7 @@
 **so that** I get immediate feedback on correctness.
 
 **Acceptance Criteria:**
-1. A file-watcher monitors `scenarios/*.yaml`.
+1. A file-watcher monitors `scenarios/*.json`.
 2. On change, it spawns the validation agent against the modified scenario.
 3. Results are printed to the console (or a notification): "✓ Scenario X solvable in N steps" or "✗ Scenario X: <failure reason>."
 4. The hook exits with code 0 on pass, non-zero on fail.
@@ -170,7 +171,7 @@
 |----|-------------|-----------|
 | NFR-1 | Performance | CLI commands respond in < 100ms; reachability evaluation in < 50ms for ≤ 20 devices. |
 | NFR-2 | Browser support | Works in latest Chrome, Firefox, and Safari. |
-| NFR-3 | No external dependencies at runtime | The simulation runs entirely client-side + local MCP server; no cloud APIs needed. |
-| NFR-4 | Single-language stack | Engine, MCP server, and frontend all in TypeScript. |
-| NFR-5 | Determinism | Given the same scenario and commands, the engine always produces identical results. |
-| NFR-6 | Extensibility | Adding a new scenario requires only a new YAML file (and optionally new CLI commands if the scenario needs them). |
+| NFR-3 | No external dependencies at runtime | Runs entirely on a local Node HTTP server + the browser. Zero npm runtime dependencies; React and the IBM Plex fonts are self-hosted from `public/vendor/` — no CDN or cloud API is contacted at runtime. |
+| NFR-4 | Single-language stack | Engine, HTTP server, MCP server, validator, and hooks are all TypeScript compiled with `tsc`; the browser client is dependency-free (a small template runtime + inline logic). |
+| NFR-5 | Determinism | Given the same scenario and commands, the engine always produces identical results (the engine is pure — no clock, no randomness, no I/O). |
+| NFR-6 | Extensibility | Adding a new scenario requires only a new JSON file under `scenarios/` (and optionally new CLI commands if the scenario needs them); the on-save hook and CI gate validate it automatically. |
