@@ -1,41 +1,146 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   listScenarios,
-  getScenario,
   getScenarioYaml,
   validateScenario,
   ValidationReport,
 } from '../game';
 import { parseScenario } from '@nrth/engine';
 
+const BLANK_TEMPLATE = `id: my-new-scenario
+title: My New Scenario
+difficulty: 2
+
+topology:
+  devices:
+    - id: client
+      hostname: ClientPC
+      type: host
+      interfaces:
+        - name: eth0
+          ip: 192.168.1.10
+          mask: 255.255.255.0
+          gateway: 192.168.1.1
+          status: up
+      routing:
+        enabled: false
+        routes: []
+        svis: []
+
+    - id: switch1
+      hostname: SW1
+      type: switch
+      interfaces:
+        - name: Gi0/1
+          mode: access
+          accessVlan: 10
+          status: up
+        - name: Gi0/2
+          mode: access
+          accessVlan: 10
+          status: up
+      routing:
+        enabled: true
+        routes: []
+        svis:
+          - vlan: 10
+            ip: 192.168.1.1
+            mask: 255.255.255.0
+            status: up
+
+    - id: server
+      hostname: Server
+      type: host
+      interfaces:
+        - name: eth0
+          ip: 192.168.1.20
+          mask: 255.255.255.0
+          gateway: 192.168.1.1
+          status: up
+      routing:
+        enabled: false
+        routes: []
+        svis: []
+
+  links:
+    - id: link1
+      from: { device: client, interface: eth0 }
+      to: { device: switch1, interface: Gi0/1 }
+    - id: link2
+      from: { device: server, interface: eth0 }
+      to: { device: switch1, interface: Gi0/2 }
+
+injected_fault:
+  device: switch1
+  interface: Gi0/1
+  field: accessVlan
+  value: 99
+  action: set
+
+ticket:
+  title: Client can't reach the server
+  symptom: ClientPC (192.168.1.10) cannot ping Server (192.168.1.20). Both are connected to SW1.
+  affected_hosts:
+    - client
+
+win_condition:
+  type: ping
+  source: client
+  destination: 192.168.1.20
+  expected: success
+
+reference_solution:
+  - device: switch1
+    commands:
+      - configure terminal
+      - interface Gi0/1
+      - switchport access vlan 10
+      - end
+`;
+
 /**
- * Author Studio — a real scenario editor with live validation.
+ * Author Studio — a full scenario authoring tool with live validation.
  *
  * Authors can:
- * 1. Select any scenario from the dropdown
- * 2. Edit the YAML directly in the textarea
- * 3. See live validation results (auto-validates on edit, debounced)
- * 4. Download the edited scenario as a .yaml file
- * 5. Reset to the original scenario content
+ * 1. Create a brand new scenario from a blank template
+ * 2. Load and edit any existing scenario
+ * 3. Write YAML from scratch (topology, fault, ticket, solution)
+ * 4. See live validation results (auto-validates on edit, debounced)
+ * 5. Download the scenario as a .yaml file
  *
  * The validation is identical to what the CI gate and on-save hook run —
  * same engine, same fairness checks, same pass/fail criteria.
  */
 export function AuthorStudio() {
   const scenarios = useMemo(() => listScenarios(), []);
-  const [id, setId] = useState(scenarios[0]?.id ?? '');
-  const [yaml, setYaml] = useState(() => getScenarioYaml(scenarios[0]?.id ?? ''));
+  const [mode, setMode] = useState<'new' | 'edit'>('new');
+  const [id, setId] = useState('');
+  const [yaml, setYaml] = useState(BLANK_TEMPLATE);
   const [report, setReport] = useState<ValidationReport | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [autoValidate, setAutoValidate] = useState(true);
   const [dirty, setDirty] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [originalYaml, setOriginalYaml] = useState(BLANK_TEMPLATE);
 
-  // Switch scenario
-  function selectScenario(newId: string) {
-    setId(newId);
-    const original = getScenarioYaml(newId);
-    setYaml(original);
+  // Start new scenario
+  function startNew() {
+    setMode('new');
+    setId('');
+    setYaml(BLANK_TEMPLATE);
+    setOriginalYaml(BLANK_TEMPLATE);
+    setReport(null);
+    setParseError(null);
+    setDirty(false);
+  }
+
+  // Load existing scenario
+  function loadExisting(scenarioId: string) {
+    setMode('edit');
+    setId(scenarioId);
+    const content = getScenarioYaml(scenarioId);
+    setYaml(content);
+    setOriginalYaml(content);
     setReport(null);
     setParseError(null);
     setDirty(false);
@@ -46,7 +151,27 @@ export function AuthorStudio() {
     try {
       const scenario = parseScenario(content);
       if (!scenario || !scenario.id || !scenario.topology) {
-        setParseError('Invalid scenario: missing required fields (id, topology)');
+        setParseError('Invalid scenario: missing required fields (id, topology, injected_fault, ticket, win_condition, reference_solution)');
+        setReport(null);
+        return;
+      }
+      if (!scenario.injected_fault) {
+        setParseError('Missing field: injected_fault');
+        setReport(null);
+        return;
+      }
+      if (!scenario.ticket) {
+        setParseError('Missing field: ticket (needs title, symptom, affected_hosts)');
+        setReport(null);
+        return;
+      }
+      if (!scenario.win_condition) {
+        setParseError('Missing field: win_condition (needs type, source, destination, expected)');
+        setReport(null);
+        return;
+      }
+      if (!scenario.reference_solution || !Array.isArray(scenario.reference_solution)) {
+        setParseError('Missing field: reference_solution (array of {device, commands[]})');
         setReport(null);
         return;
       }
@@ -62,10 +187,9 @@ export function AuthorStudio() {
   // Handle YAML edit
   function handleYamlChange(newContent: string) {
     setYaml(newContent);
-    setDirty(newContent !== getScenarioYaml(id));
+    setDirty(newContent !== originalYaml);
 
     if (autoValidate) {
-      // Debounce validation to avoid running on every keystroke
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => runValidation(newContent), 600);
     }
@@ -76,13 +200,13 @@ export function AuthorStudio() {
     runValidation(yaml);
   }
 
-  // Reset to original
+  // Reset
   function reset() {
-    const original = getScenarioYaml(id);
-    setYaml(original);
+    setYaml(originalYaml);
     setDirty(false);
     setParseError(null);
-    runValidation(original);
+    if (originalYaml) runValidation(originalYaml);
+    else setReport(null);
   }
 
   // Download scenario YAML
@@ -91,8 +215,7 @@ export function AuthorStudio() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    // Use the scenario id for filename, fallback to selected id
-    let filename = id;
+    let filename = 'new-scenario';
     try {
       const parsed = parseScenario(yaml);
       if (parsed?.id) filename = parsed.id;
@@ -104,7 +227,7 @@ export function AuthorStudio() {
 
   // Auto-validate on first load
   useEffect(() => {
-    if (yaml) runValidation(yaml);
+    if (yaml && yaml !== BLANK_TEMPLATE) runValidation(yaml);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup debounce on unmount
@@ -112,30 +235,47 @@ export function AuthorStudio() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, []);
 
+  // Get filename for display
+  let displayFile = mode === 'new' ? 'new-scenario.yaml' : `${id}.yaml`;
+  try {
+    const parsed = parseScenario(yaml);
+    if (parsed?.id) displayFile = parsed.id + '.yaml';
+  } catch { /* keep default */ }
+
   return (
     <div className="wrap">
       <div className="eyebrow">Author studio</div>
-      <h1>Edit &amp; validate scenarios live</h1>
+      <h1>Create &amp; validate scenarios</h1>
       <p className="sub">
-        Edit the YAML below. The engine validates in real-time — the same checks the{' '}
-        <b>on-save hook</b> and <b>CI pipeline</b> run. Download when you're done.
+        Write a scenario from scratch or edit an existing one. The engine validates live —
+        the same checks the <b>on-save hook</b> and <b>CI pipeline</b> run.
       </p>
 
-      {/* Toolbar */}
+      {/* Mode selector + Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          className={`btn ${mode === 'new' ? 'primary' : ''}`}
+          onClick={startNew}
+          title="Start with a blank template"
+        >
+          + New scenario
+        </button>
+        <span style={{ color: 'var(--muted)', fontSize: 13 }}>or</span>
         <select
           value={id}
-          onChange={(e) => selectScenario(e.target.value)}
+          onChange={(e) => loadExisting(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 14 }}
         >
+          <option value="" disabled>Load existing…</option>
           {scenarios.map((s) => (
             <option key={s.id} value={s.id}>{s.title}</option>
           ))}
         </select>
+        <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 4px' }} />
         <button className="btn primary" onClick={validate}>Validate</button>
         <button className="btn" onClick={reset} disabled={!dirty} title="Reset to original">Reset</button>
         <button className="btn" onClick={download} title="Download as .yaml file">
-          ↓ Download .yaml
+          ↓ Download
         </button>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--muted)', marginLeft: 'auto' }}>
           <input
@@ -143,7 +283,7 @@ export function AuthorStudio() {
             checked={autoValidate}
             onChange={(e) => setAutoValidate(e.target.checked)}
           />
-          Auto-validate on edit
+          Live validation
         </label>
       </div>
 
@@ -153,8 +293,13 @@ export function AuthorStudio() {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>
-              scenarios/{id}.yaml
+              scenarios/{displayFile}
             </span>
+            {mode === 'new' && !dirty && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'rgba(46,92,255,.08)', padding: '2px 8px', borderRadius: 6 }}>
+                ✦ new
+              </span>
+            )}
             {dirty && (
               <span style={{ fontSize: 11, fontWeight: 600, color: '#f5a623', background: 'rgba(245,166,35,.12)', padding: '2px 8px', borderRadius: 6 }}>
                 ● modified
@@ -168,6 +313,7 @@ export function AuthorStudio() {
             spellCheck={false}
             autoCorrect="off"
             autoCapitalize="off"
+            placeholder="Write your scenario YAML here..."
           />
         </div>
 
@@ -190,7 +336,9 @@ export function AuthorStudio() {
 
             {!parseError && !report && (
               <p className="sub" style={{ margin: '14px 0 0' }}>
-                {autoValidate ? 'Start typing to see live validation...' : 'Hit Validate to check this scenario.'}
+                {autoValidate
+                  ? 'Edit the YAML to see live validation…'
+                  : 'Hit Validate to check this scenario.'}
               </p>
             )}
 
@@ -205,7 +353,34 @@ export function AuthorStudio() {
             )}
           </div>
 
-          {/* Fairness rules reference */}
+          {/* Schema reference */}
+          <div className="block" style={{ marginTop: 16 }}>
+            <div className="h">Required fields</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, marginTop: 8, fontFamily: 'var(--mono)' }}>
+              <div><b>id:</b> unique-kebab-case</div>
+              <div><b>title:</b> Human Readable Title</div>
+              <div><b>difficulty:</b> 1-5</div>
+              <div><b>topology:</b></div>
+              <div>&nbsp; <b>devices:</b> [{'{'}id, hostname, type, interfaces, routing{'}'}]</div>
+              <div>&nbsp; <b>links:</b> [{'{'}id, from, to{'}'}]</div>
+              <div><b>injected_fault:</b> {'{'}device, field, value, action{'}'}</div>
+              <div><b>ticket:</b> {'{'}title, symptom, affected_hosts{'}'}</div>
+              <div><b>win_condition:</b> {'{'}type: ping, source, destination, expected{'}'}</div>
+              <div><b>reference_solution:</b> [{'{'}device, commands[]'}{'}]</div>
+            </div>
+          </div>
+
+          {/* Supported device types */}
+          <div className="block" style={{ marginTop: 16 }}>
+            <div className="h">Device types</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, marginTop: 8 }}>
+              <div><code>switch</code> · <code>router</code> · <code>firewall</code> · <code>host</code></div>
+              <div><code>ec2</code> · <code>vpc-router</code> (AWS)</div>
+              <div><code>linux-server</code> · <code>windows-server</code> · <code>docker-host</code></div>
+            </div>
+          </div>
+
+          {/* Fairness rules */}
           <div className="block" style={{ marginTop: 16 }}>
             <div className="h">Fairness rules</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginTop: 8 }}>
@@ -217,16 +392,17 @@ export function AuthorStudio() {
             </div>
           </div>
 
-          {/* Workflow hint */}
+          {/* Workflow */}
           <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.3px', textTransform: 'uppercase' }}>
               Workflow
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginTop: 6 }}>
-              1. Edit the YAML (topology, fault, ticket, solution)<br/>
-              2. Watch the live validation update<br/>
-              3. When it says PASS, click <b>Download</b><br/>
-              4. Drop the file in <code>scenarios/</code> — the on-save hook confirms it
+              1. Click <b>+ New scenario</b> or load an existing one<br/>
+              2. Edit topology, fault, ticket, and solution<br/>
+              3. Watch the live validation — aim for <b>PASS</b><br/>
+              4. Click <b>↓ Download</b> and drop in <code>scenarios/</code><br/>
+              5. The on-save hook confirms it on disk
             </div>
           </div>
         </div>
