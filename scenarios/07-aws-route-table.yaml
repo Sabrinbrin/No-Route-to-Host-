@@ -189,3 +189,18 @@ layout:
   db-ec2:
     x: 520
     'y': 80
+
+
+explanation:
+  why: >-
+    The VPC peering connection was active, but the route table in the prod VPC had no route
+    pointing to the peer VPC's CIDR via the peering connection. Without the route, traffic had
+    nowhere to go.
+  concept: >-
+    VPC Peering connects two VPCs, but it's not automatic routing — you must add routes in BOTH
+    VPC route tables pointing to each other's CIDR blocks via the peering connection. It's a
+    common gotcha: peering is "up" but traffic doesn't flow without routes.
+  production: >-
+    Always check route tables on both sides of a peering connection. Also verify there's no
+    overlapping CIDR (peering won't work with overlapping address spaces). Use VPC Reachability
+    Analyzer for complex multi-VPC troubleshooting.

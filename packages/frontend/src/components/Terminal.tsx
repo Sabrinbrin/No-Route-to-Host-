@@ -8,6 +8,7 @@ interface Props {
   device: string;
   hostname: string;
   onWin: () => void;
+  onCommand?: (cmd: string, stateChanged: boolean) => void;
 }
 
 const HELP_IOS = [
@@ -111,7 +112,7 @@ const COMPLETIONS = [
   'Get-NetFirewallRule', 'New-NetFirewallRule', 'Set-NetFirewallRule',
 ];
 
-export function TerminalView({ session, device, hostname, onWin }: Props) {
+export function TerminalView({ session, device, hostname, onWin, onCommand }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const line = useRef('');
@@ -119,8 +120,8 @@ export function TerminalView({ session, device, hostname, onWin }: Props) {
   const hIdx = useRef(0);
   const tabMatches = useRef<string[]>([]);
   const tabIdx = useRef(0);
-  const ctx = useRef({ session, device, hostname, onWin });
-  ctx.current = { session, device, hostname, onWin };
+  const ctx = useRef({ session, device, hostname, onWin, onCommand });
+  ctx.current = { session, device, hostname, onWin, onCommand };
 
   function prompt(): string {
     const { session, device, hostname } = ctx.current;
@@ -229,9 +230,10 @@ export function TerminalView({ session, device, hostname, onWin }: Props) {
     } else if (low === 'clear' || low === 'cls') {
       t.clear();
     } else {
-      const { session, device, onWin } = ctx.current;
+      const { session, device, onWin, onCommand } = ctx.current;
       const r = session.run(device, cmd);
       if (r.output) writeOut(r.output);
+      onCommand?.(cmd, r.stateChanged);
       if (r.won) {
         t.write('\x1b[32m\r\n\u2713 Reachability restored \u2014 ticket resolved.\x1b[0m\r\n');
         setTimeout(onWin, 700);

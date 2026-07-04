@@ -102,3 +102,18 @@ layout:
   host-v20:
     x: 500
     'y': 50
+
+
+explanation:
+  why: >-
+    The Layer 3 switch had IP routing enabled, but the VLAN 20 SVI was administratively shut
+    down. Without the SVI up, the switch had no Layer 3 interface in that subnet and couldn't
+    route traffic to/from it.
+  concept: >-
+    Inter-VLAN routing requires a Layer 3 interface (SVI) in each VLAN that needs routing. The
+    SVI acts as the default gateway for hosts in that VLAN. If it's down, the VLAN is isolated
+    at Layer 3 even though Layer 2 works fine.
+  production: >-
+    SVIs can be shut during maintenance or by accident. "show ip int brief" shows SVI status
+    quickly. In production, you'd also check HSRP/VRRP if the gateway is redundant — the
+    standby might not have taken over.

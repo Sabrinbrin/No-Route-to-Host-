@@ -1,68 +1,64 @@
-# Recording Demo GIFs
+# Recording Guide — Demo Video
 
-The README references three GIF files. Record them on your Kali machine:
+Tips for recording the demo video for the BuildFest submission.
 
-## 1. Gameplay demo (`demo-gameplay.gif`)
+## What to show (in order)
 
-```bash
-# Start the dev server
-npm run dev
+### 1. The problem (30s)
+- Open the landing page — show the tagline and the stats (11 scenarios, 100% agent-verified)
+- Briefly explain: "Junior engineers learn config syntax but never practise the diagnostic loop"
 
-# In another terminal, record the browser interaction:
-# - Open http://localhost:5173
-# - Select "Wrong Access VLAN"
-# - Type: sh vlan brief → conf t → int Gi0/1 → sw acc vlan 10 → end → ping 10.0.10.1
-# - Show the ticket resolved + grade
+### 2. Gameplay (60–90s)
+- Pick **Scenario 1 (Wrong Access VLAN)** for a clean, fast demo
+- Show the ticket panel — read the symptom aloud
+- Show the topology — links are red/broken
+- Demonstrate investigation: `show vlan brief`, `ping 10.0.10.1` (fails)
+- Apply the fix: `conf t` → `int Gi0/1` → `sw acc vlan 10` → `end`
+- Ping again — succeeds, links turn green, "Ticket Resolved" overlay appears
+- Show the debrief (grade + explanation)
 
-# Tools: OBS (screen record → convert to GIF) or LICEcap (direct GIF)
-```
+### 3. Author Studio (30s)
+- Switch to Author Studio tab
+- Load an existing scenario — show YAML on the left, live validation on the right
+- Modify something (e.g. change the VLAN in reference_solution to a wrong value)
+- Watch it fail: "FAIL unsolvable"
+- Fix it back — "PASS: Solvable in 4 steps, fair"
+- Key point: "Same engine as CI — an instructor can't ship a broken lab"
 
-## 2. On-save hook demo (`demo-onsave-hook.gif`)
+### 4. Kiro + MCP (30–45s)
+- Show the MCP server config in `kiro.json` (or screenshot)
+- In Kiro chat, use the `validate-scenario` prompt
+- Show the agent calling `load_scenario`, `check_win_condition`, `run_command`, etc.
+- Agent reports PASS — "Kiro literally plays the game to prove it works"
 
-```bash
-# Record your terminal:
-asciinema rec onsave.cast
+### 5. On-save hook (15s)
+- Show terminal with `npm run watch:scenarios`
+- Edit a scenario YAML, save
+- Hook fires: "✓ Wrong Access VLAN — Solvable in 4 steps"
+- Break it, save again: "✗ ... FAIL unsolvable"
 
-# Run these commands:
-npm run build:engine
-node packages/validator/dist/index.js    # Shows all 11 PASS
+### 6. Architecture wrap-up (15s)
+- Show the project structure briefly (monorepo, shared engine)
+- Emphasize: "One engine, imported by the game, the MCP server, and CI — zero duplication"
 
-# Break scenario 1 (edit the YAML: change vlan 10 → vlan 99 in reference_solution)
-# Then validate just that file:
-node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
-# → FAIL unsolvable
+## Recording tips
 
-# Fix it back (vlan 99 → vlan 10):
-node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
-# → PASS: Solvable in 4 steps
-
-# Stop recording:
-# Ctrl+D
-
-# Convert to GIF:
-agg onsave.cast docs/demo-onsave-hook.gif --cols 100 --rows 24
-```
-
-## 3. MCP validate tool demo (`demo-mcp-validate.gif`)
-
-```bash
-asciinema rec mcp.cast
-
-# Show the MCP server responding to validate_scenario:
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_scenarios","arguments":{}}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"validate_scenario","arguments":{"id":"wrong-access-vlan"}}}
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"validate_scenario","arguments":{"id":"linux-iptables"}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"validate_scenario","arguments":{"id":"windows-firewall"}}}' \
-| node packages/mcp-server/dist/index.js 2>/dev/null | python3 -m json.tool
-
-# Ctrl+D
-agg mcp.cast docs/demo-mcp-validate.gif --cols 100 --rows 30
-```
+- **Resolution:** 1920x1080 minimum, 60fps preferred
+- **Terminal font size:** bump to 14–16px so it's readable in video
+- **Browser zoom:** 110–125% makes the UI easier to read on video
+- **Audio:** record a voiceover — even a simple narration wins over silent video
+- **Length:** aim for 3–4 minutes total (judges appreciate concise demos)
+- **Thumbnail:** pause on the landing page hero for a clean thumbnail frame
 
 ## Tools
 
-- **asciinema** — terminal recording: `pip install asciinema`
-- **agg** — asciinema to GIF: https://github.com/asciinema/agg
-- **LICEcap** — direct screen-to-GIF (Windows/Mac)
-- **OBS** — screen record, then `ffmpeg -i vid.mp4 -vf "fps=10,scale=720:-1" demo.gif`
+- **OBS Studio** (free) for screen recording
+- **QuickTime** (macOS) for simple capture
+- Upload to **YouTube** (unlisted) and link in the README + Devpost submission
+
+## What NOT to show
+
+- Don't show `npm install` or `git clone` — judges don't need setup steps
+- Don't read the README aloud — they'll read it themselves
+- Don't show every scenario — one well-played scenario is more compelling than 11 rushed ones
+- Don't show code scrolling — show the *product* running, not files being read

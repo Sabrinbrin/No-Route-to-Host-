@@ -40,6 +40,9 @@ jobs:
       - name: MCP server smoke test
         run: node scripts/smoke-mcp.mjs
 
+      - name: Lint (strict typecheck all packages)
+        run: npm run lint
+
       - name: Frontend builds for Pages
         run: |
           cd packages/frontend

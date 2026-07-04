@@ -133,3 +133,17 @@ layout:
   host-d:
     x: 520
     'y': 50
+
+
+explanation:
+  why: >-
+    The trunk between switches had an allowed-VLAN list that omitted VLAN 30. Traffic for that
+    VLAN was silently dropped at the trunk boundary. Adding it back restored cross-switch connectivity.
+  concept: >-
+    Trunk links carry multiple VLANs using 802.1Q tagging. The "allowed vlan" list acts as a
+    filter — only listed VLANs traverse the trunk. A missing VLAN means complete isolation
+    between switches for that VLAN.
+  production: >-
+    This is common after trunk security hardening (only allowing needed VLANs) when a new VLAN
+    is added but the trunk filter isn't updated. Check both ends — the list must match on both
+    sides of the trunk.

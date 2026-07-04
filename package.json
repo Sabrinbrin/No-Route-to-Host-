@@ -11,6 +11,7 @@
     "build": "tsc -b && npm run build -w @nrth/frontend",
     "build:engine": "tsc -b",
     "typecheck": "tsc -b && tsc --noEmit -p packages/frontend",
+    "lint": "tsc -b && tsc --noEmit -p packages/frontend",
     "dev": "npm run dev -w @nrth/frontend",
     "preview": "npm run preview -w @nrth/frontend",
     "test": "tsc -b && node packages/engine/dist/test/index.js",

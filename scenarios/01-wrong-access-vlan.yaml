@@ -109,3 +109,17 @@ layout:
   host-b:
     x: 500
     'y': 50
+
+
+explanation:
+  why: >-
+    The access port was assigned to VLAN 20, but the host needed VLAN 10 (where the gateway
+    SVI lives). By setting the correct VLAN, the host's traffic reaches the SVI and gets routed.
+  concept: >-
+    Access VLANs determine which broadcast domain a port belongs to. A host can only reach its
+    gateway if they share the same VLAN. This is Layer 2 segmentation — the most common cause
+    of "one host is down" tickets.
+  production: >-
+    This happens after port moves, cable swaps, or template misapplies. Always verify with
+    "show vlan brief" before blaming Layer 3. In production, you'd also check the MAC address
+    table to confirm the host is learned on the expected port.

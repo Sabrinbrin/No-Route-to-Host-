@@ -7,7 +7,7 @@ through the MCP server's simulation tools.
 
 ## Trigger
 
-- On-save of any `scenarios/*.json` file
+- On-save of any `scenarios/*.yaml` file
 - Manual invocation via `npm run validate`
 
 ## Tools Used

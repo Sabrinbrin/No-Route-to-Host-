@@ -4,8 +4,11 @@ import { TerminalView } from './components/Terminal';
 import { TicketPanel } from './components/TicketPanel';
 import { Topology } from './components/Topology';
 import { AuthorStudio } from './components/AuthorStudio';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { CommandHistory, type HistoryEntry } from './components/CommandHistory';
+import { StatsView, recordCompletion } from './components/Stats';
 
-type Screen = 'landing' | 'dashboard' | 'play' | 'author';
+type Screen = 'landing' | 'dashboard' | 'play' | 'author' | 'stats';
 
 const TAG = (d: number) => (d <= 2 ? 'Switching' : d <= 4 ? 'Routing / Firewall' : 'Cloud / OS');
 const CHIP = (d: number) => (d <= 1 ? 's' : d <= 3 ? 'c' : 'f');
@@ -15,12 +18,28 @@ export function App() {
   const [screen, setScreen] = useState<Screen>('landing');
   const scenarios = useMemo(() => listScenarios(), []);
   const [session, setSession] = useState<GameSession | null>(null);
+
+  // Handle empty scenarios (build/bundle failure)
+  if (scenarios.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 22, color: '#14161b' }}>No scenarios loaded</h2>
+        <p style={{ color: '#5b6472', fontSize: 14, maxWidth: 440, lineHeight: 1.6 }}>
+          The scenario bundle appears empty. This usually means the build didn't include
+          the <code>scenarios/*.yaml</code> files. Try rebuilding with <code>npm run build</code>.
+        </p>
+      </div>
+    );
+  }
   const [ticketNum, setTicketNum] = useState(1);
   const [device, setDevice] = useState('');
   const [solved, setSolved] = useState(false);
   const [finalTime, setFinalTime] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   const started = useRef(0);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const historyId = useRef(0);
 
   // Persist solved scenarios in localStorage
   const [solvedIds, setSolvedIds] = useState<Set<string>>(() => {
@@ -58,14 +77,20 @@ export function App() {
     setDevice(first?.id ?? '');
     setSolved(false);
     setFinalTime(null);
+    setHistory([]);
+    historyId.current = 0;
     started.current = Date.now();
     setScreen('play');
   }
 
   function onWin() {
-    setFinalTime(Math.floor((Date.now() - started.current) / 1000));
+    const time = Math.floor((Date.now() - started.current) / 1000);
+    setFinalTime(time);
     setSolved(true);
-    if (session) markSolved(session.scenario.id);
+    if (session) {
+      markSolved(session.scenario.id);
+      recordCompletion(session.scenario.id, time, session.commandCount);
+    }
   }
 
   const hostname = session?.network.devices.find((d) => d.id === device)?.hostname ?? 'SW1';
@@ -80,6 +105,7 @@ export function App() {
           </div>
           <nav className="nav">
             <button className={screen === 'dashboard' ? 'active' : ''} onClick={() => setScreen('dashboard')}>Scenarios</button>
+            <button className={screen === 'stats' ? 'active' : ''} onClick={() => setScreen('stats')}>Stats</button>
             <button className={screen === 'author' ? 'active' : ''} onClick={() => setScreen('author')}>Author studio</button>
           </nav>
           <div className="spacer" />
@@ -90,20 +116,35 @@ export function App() {
       <div className="content">
         {screen === 'landing' && <Landing onPlay={() => play(scenarios[0]?.id)} onBrowse={() => setScreen('dashboard')} onAuthor={() => setScreen('author')} scenarioCount={scenarios.length} />}
         {screen === 'dashboard' && <Dashboard scenarios={scenarios} solvedIds={solvedIds} onPlay={play} />}
+        {screen === 'stats' && <StatsView />}
         {screen === 'author' && <AuthorStudio />}
         {screen === 'play' && session && (
-          <Play
-            session={session}
-            device={device}
-            hostname={hostname}
-            ticketNum={ticketNum}
-            solved={solved}
-            elapsed={elapsed}
-            onDevice={setDevice}
-            onWin={onWin}
-            onExit={() => setScreen('dashboard')}
-            onReset={() => play(session.scenario.id)}
-          />
+          <ErrorBoundary fallback={<div className="wrap"><h2>Terminal error</h2><p className="sub">The play session encountered an error. <button className="btn primary" onClick={() => setScreen('dashboard')}>Back to scenarios</button></p></div>}>
+            <Play
+              session={session}
+              device={device}
+              hostname={hostname}
+              ticketNum={ticketNum}
+              solved={solved}
+              elapsed={elapsed}
+              history={history}
+              startTime={started.current}
+              onDevice={setDevice}
+              onWin={onWin}
+              onCommand={(cmd, stateChanged) => {
+                setHistory(prev => [...prev, {
+                  id: ++historyId.current,
+                  device,
+                  hostname,
+                  command: cmd,
+                  timestamp: Date.now(),
+                  stateChanged,
+                }]);
+              }}
+              onExit={() => setScreen('dashboard')}
+              onReset={() => play(session.scenario.id)}
+            />
+          </ErrorBoundary>
         )}
       </div>
 
@@ -142,7 +183,7 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
       </div>
 
       {/* Hero */}
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '54px 26px 40px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+      <div className="hero-grid" style={{ maxWidth: 1120, margin: '0 auto', padding: '54px 26px 40px', display: 'grid', gap: 48, alignItems: 'center' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 500, color: '#5B21B6', background: 'rgba(124,58,237,.09)', border: '1px solid rgba(124,58,237,.2)', padding: '6px 12px', borderRadius: 999 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#7C3AED' }}></span>
@@ -186,7 +227,7 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
       </div>
 
       {/* Feature cards */}
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '18px 26px 40px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+      <div className="feature-grid" style={{ maxWidth: 1120, margin: '0 auto', padding: '18px 26px 40px', display: 'grid', gap: 18 }}>
         <div style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: 14, padding: 22 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(124,58,237,.1)', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontFamily: 'var(--mono)' }}>$</div>
           <div style={{ fontWeight: 600, fontSize: 15.5, marginTop: 14, color: '#14161B' }}>Real vendor CLI</div>
@@ -241,9 +282,10 @@ function Dashboard({ scenarios, solvedIds, onPlay }: { scenarios: ReturnType<typ
 
 function Play(props: {
   session: GameSession; device: string; hostname: string; ticketNum: number;
-  solved: boolean; elapsed: number; onDevice: (id: string) => void; onWin: () => void; onExit: () => void; onReset: () => void;
+  solved: boolean; elapsed: number; history: HistoryEntry[]; startTime: number;
+  onDevice: (id: string) => void; onWin: () => void; onCommand: (cmd: string, stateChanged: boolean) => void; onExit: () => void; onReset: () => void;
 }) {
-  const { session, device, hostname, ticketNum, solved, elapsed, onDevice, onWin, onExit, onReset } = props;
+  const { session, device, hostname, ticketNum, solved, elapsed, history, startTime, onDevice, onWin, onCommand, onExit, onReset } = props;
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -263,11 +305,12 @@ function Play(props: {
             <span className="name">{hostname} — {session.network.devices.find(d => d.id === device)?.type ?? 'device'} console</span>
             <button className="reset" onClick={onReset}>reset</button>
           </div>
-          <TerminalView session={session} device={device} hostname={hostname} onWin={onWin} />
+          <TerminalView session={session} device={device} hostname={hostname} onWin={onWin} onCommand={onCommand} />
         </div>
         <div className="side">
           <TicketPanel scenario={session.scenario} ticketNum={ticketNum} />
           <Topology network={session.network} solved={solved} activeDevice={device} onDevice={onDevice} />
+          <CommandHistory entries={history} startTime={startTime} />
           <div style={{ marginTop: 14, fontFamily: 'var(--mono)', fontSize: 12, color: '#8b949e', padding: '0 4px' }}>
             try: show running-config · ping {session.scenario.win_condition.destination} · ?
           </div>
@@ -280,7 +323,7 @@ function Play(props: {
 function Debrief({ scenario, seconds, commands, onNext }: { scenario: any; seconds: number; commands: number; onNext: () => void }) {
   const grade = seconds < 90 && commands < 12 ? 'A' : seconds < 180 && commands < 20 ? 'B' : seconds < 300 ? 'C' : 'D';
   const color = grade === 'A' ? 'var(--green)' : grade === 'B' ? 'var(--accent)' : grade === 'C' ? 'var(--amber)' : 'var(--red)';
-  const explanation = getExplanation(scenario.id);
+  const explanation = scenario.explanation ?? null;
   return (
     <div className="overlay">
       <div className="modal" style={{ maxWidth: 620, textAlign: 'left' }}>
@@ -313,65 +356,4 @@ function Debrief({ scenario, seconds, commands, onNext }: { scenario: any; secon
   );
 }
 
-interface Explanation { why: string; concept: string; production: string; }
 
-function getExplanation(id: string): Explanation | null {
-  const explanations: Record<string, Explanation> = {
-    'wrong-access-vlan': {
-      why: 'The access port was assigned to VLAN 20, but the host needed VLAN 10 (where the gateway SVI lives). By setting the correct VLAN, the host\'s traffic reaches the SVI and gets routed.',
-      concept: 'Access VLANs determine which broadcast domain a port belongs to. A host can only reach its gateway if they share the same VLAN. This is Layer 2 segmentation — the most common cause of "one host is down" tickets.',
-      production: 'This happens after port moves, cable swaps, or template misapplies. Always verify with "show vlan brief" before blaming Layer 3. In production, you\'d also check the MAC address table to confirm the host is learned on the expected port.',
-    },
-    'trunk-allowed-list': {
-      why: 'The trunk between switches had an allowed-VLAN list that omitted VLAN 30. Traffic for that VLAN was silently dropped at the trunk boundary. Adding it back restored cross-switch connectivity.',
-      concept: 'Trunk links carry multiple VLANs using 802.1Q tagging. The "allowed vlan" list acts as a filter — only listed VLANs traverse the trunk. A missing VLAN means complete isolation between switches for that VLAN.',
-      production: 'This is common after trunk security hardening (only allowing needed VLANs) when a new VLAN is added but the trunk filter isn\'t updated. Check both ends — the list must match on both sides of the trunk.',
-    },
-    'inter-vlan-routing': {
-      why: 'The Layer 3 switch had IP routing enabled, but the VLAN 20 SVI was administratively shut down. Without the SVI up, the switch had no Layer 3 interface in that subnet and couldn\'t route traffic to/from it.',
-      concept: 'Inter-VLAN routing requires a Layer 3 interface (SVI) in each VLAN that needs routing. The SVI acts as the default gateway for hosts in that VLAN. If it\'s down, the VLAN is isolated at Layer 3 even though Layer 2 works fine.',
-      production: 'SVIs can be shut during maintenance or by accident. "show ip int brief" shows SVI status quickly. In production, you\'d also check HSRP/VRRP if the gateway is redundant — the standby might not have taken over.',
-    },
-    'missing-default-route': {
-      why: 'The core router had no default route (0.0.0.0/0) pointing upstream. Internal routing worked because those subnets were directly connected, but any traffic destined for the internet had nowhere to go.',
-      concept: 'A default route is the "route of last resort" — it matches any destination not covered by more specific routes. Without it, the router drops traffic to unknown destinations with "no route to host." It\'s the most critical single route in any network.',
-      production: 'Default routes disappear after router reloads (if not saved), during routing protocol issues, or when a static route\'s next-hop becomes unreachable. Always check "show ip route" first — it\'s the fastest way to spot missing routes.',
-    },
-    'firewall-tunnel': {
-      why: 'The IPsec tunnel was established (Phase 1 + Phase 2 up), but the branch firewall had no policy permitting traffic FROM the HQ subnet TO the branch subnet through the tunnel interface. Firewalls are default-deny — no policy means no traffic.',
-      concept: 'VPN tunnels separate the crypto plane (tunnel establishment) from the traffic plane (what\'s allowed through). A tunnel being "up" only means the devices agreed on encryption — it doesn\'t mean traffic is permitted. Firewall policies must explicitly allow the desired traffic flows.',
-      production: 'This is the #1 "tunnel up but no traffic" issue in production. Verify with packet captures on the tunnel interface and check policy hit counters. Also watch for asymmetric policies — both sides need to permit the traffic.',
-    },
-    'aws-security-group': {
-      why: 'The security group on the app server only allowed TCP/443 inbound. ICMP (ping) was not in the inbound rules, so the VPC silently dropped the ping packets before they reached the instance.',
-      concept: 'AWS Security Groups are stateful firewalls at the instance level. They default-deny all inbound traffic. Each protocol/port must be explicitly allowed. "Stateful" means you only need an inbound rule — return traffic is automatically allowed.',
-      production: 'This is the most common AWS connectivity issue. Use VPC Flow Logs to confirm traffic is being rejected at the SG level. Remember: SGs are stateful (no need for outbound rules for return traffic), but NACLs are stateless (you need both directions).',
-    },
-    'aws-route-table': {
-      why: 'The VPC peering connection was active, but the route table in the prod VPC had no route pointing to the peer VPC\'s CIDR via the peering connection. Without the route, traffic had nowhere to go.',
-      concept: 'VPC Peering connects two VPCs, but it\'s not automatic routing — you must add routes in BOTH VPC route tables pointing to each other\'s CIDR blocks via the peering connection. It\'s a common gotcha: peering is "up" but traffic doesn\'t flow without routes.',
-      production: 'Always check route tables on both sides of a peering connection. Also verify there\'s no overlapping CIDR (peering won\'t work with overlapping address spaces). Use VPC Reachability Analyzer for complex multi-VPC troubleshooting.',
-    },
-    'aws-nacl-deny': {
-      why: 'The NACL on the API subnet allowed TCP inbound (rule 100) but had no rule allowing ICMP inbound. NACLs are stateless — unlike security groups, you need explicit rules for both the request AND response directions.',
-      concept: 'Network ACLs are stateless subnet-level firewalls evaluated by rule number (lowest first). Unlike Security Groups (stateful), NACLs require explicit allow rules in both directions. A common mistake is adding a TCP allow but forgetting ICMP for ping.',
-      production: 'NACL issues are tricky because traffic works for some protocols but not others (since each protocol needs its own rule). Check both inbound AND outbound rules. Use VPC Flow Logs with "REJECT" filter to identify NACL blocks vs SG blocks.',
-    },
-    'linux-iptables': {
-      why: 'The iptables INPUT chain policy was DROP, and while rules existed for SSH (22) and HTTP (80/443), the ICMP accept rule was removed during hardening. The firewall dropped ping packets at the kernel level.',
-      concept: 'iptables processes rules top-to-bottom per chain. When no rule matches, the chain policy applies (ACCEPT or DROP). A DROP policy with no ICMP rule means silent packet loss — the sender gets no response, not even a "rejected" message.',
-      production: 'After iptables hardening, always test ICMP connectivity. Use "iptables -L -n -v" to see hit counters on each rule — zero hits on an expected rule means traffic isn\'t reaching it. Order matters: a DROP rule above your ACCEPT will win.',
-    },
-    'docker-networking': {
-      why: 'An iptables flush removed all rules including the ICMP accept in the INPUT chain. With policy DROP, the host became unreachable from the network. Docker\'s own FORWARD chain rules survived (containers work internally) but host-level INPUT was empty.',
-      concept: 'Docker heavily uses iptables for its networking (NAT, port mapping, container isolation). Flushing iptables to "fix" Docker issues often breaks host connectivity because it removes ALL rules while keeping restrictive chain policies.',
-      production: 'Never "iptables -F" on a production Docker host without checking chain policies first. Use "iptables-save" to backup before changes. Better: use "docker network" commands to troubleshoot Docker networking, not raw iptables.',
-    },
-    'windows-firewall': {
-      why: 'Windows Firewall had an "ICMP Echo Request" allow rule, but it was disabled (Enabled=False). The Domain profile default is Block Inbound, so without an active allow rule, ICMP was silently dropped. Re-enabling the rule restored ping.',
-      concept: 'Windows Firewall evaluates rules per-profile (Domain/Private/Public). Rules can exist but be disabled — "Get-NetFirewallRule" shows the Enabled status. Group Policy refreshes can disable rules, especially after domain migrations.',
-      production: 'After GP refreshes or domain changes, check "Get-NetFirewallRule | Where Enabled -eq False" for recently disabled rules. In production, also check if the firewall profile changed (Domain→Public) which applies different default rules.',
-    },
-  };
-  return explanations[id] ?? null;
-}
