@@ -57,7 +57,7 @@ export function App() {
       {screen !== 'landing' && (
         <header className="header">
           <div className="brand" onClick={() => setScreen('landing')} style={{ cursor: 'pointer' }}>
-            <svg width="22" height="22" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#14161B"/><circle cx="16" cy="16" r="4" fill="#7C3AED"/><path d="M16 6v4M16 22v4M6 16h4M22 16h4" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round"/></svg>
+            <span style={{fontSize:20}}>🖥️</span>
             <span>No Route to Host</span>
           </div>
           <nav className="nav">
@@ -112,7 +112,7 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
       {/* Header */}
       <div style={{ maxWidth: 1120, margin: '0 auto', padding: '22px 26px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <svg width="26" height="26" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#14161B"/><circle cx="16" cy="16" r="4" fill="#7C3AED"/><path d="M16 6v4M16 22v4M6 16h4M22 16h4" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span style={{fontSize:22}}>🖥️</span>
           <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.2px', color: '#14161B' }}>No Route to Host</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
