@@ -128,16 +128,16 @@ function Landing({ onPlay, onBrowse, onAuthor, scenarioCount }: { onPlay: () => 
   return (
     <div style={{ minHeight: '100vh', background: '#F4F6FA' }}>
       {/* Header */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #E3E7EE', padding: '14px 0', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '0 26px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{fontSize:22}}>🖥️</span>
-            <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.2px', color: '#14161B' }}>No Route to Host</span>
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '26px 26px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#14161B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#E5484D' }}></div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={onAuthor} style={{ fontSize: 14, fontWeight: 500, color: '#14161B', padding: '9px 15px', borderRadius: 9, border: '1px solid #E3E7EE', background: '#fff', cursor: 'pointer' }}>For instructors</button>
-            <button onClick={onBrowse} style={{ fontSize: 14, fontWeight: 600, color: '#fff', padding: '9px 17px', borderRadius: 9, background: '#7C3AED', border: 'none', cursor: 'pointer' }}>Start training</button>
-          </div>
+          <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-.2px', color: '#14161B' }}>No Route to Host</span>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onAuthor} style={{ fontSize: 14, fontWeight: 500, color: '#14161B', padding: '9px 15px', borderRadius: 9, border: '1px solid #E3E7EE', background: '#fff', cursor: 'pointer' }}>For instructors</button>
+          <button onClick={onBrowse} style={{ fontSize: 14, fontWeight: 600, color: '#fff', padding: '9px 17px', borderRadius: 9, background: '#4F46E5', border: 'none', cursor: 'pointer' }}>Start training</button>
         </div>
       </div>
 
