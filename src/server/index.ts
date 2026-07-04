@@ -44,6 +44,8 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
 };
 
 // ===== API Handlers =====
@@ -226,9 +228,11 @@ const server = createServer((req, res) => {
       res.end('Not found');
       return;
     }
-    const content = readFileSync(fullPath, 'utf-8');
     const ext = extname(fullPath);
     const mime = MIME[ext] || 'text/plain';
+    // Read binary assets (fonts, images) as a Buffer so bytes aren't mangled
+    // by utf-8 decoding; text assets can be read either way.
+    const content = readFileSync(fullPath);
     res.writeHead(200, { 'Content-Type': mime });
     res.end(content);
   } catch {

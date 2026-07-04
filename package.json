@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "vendor:assets": "node scripts/vendor-assets.mjs",
     "validate": "node dist/validator/index.js",
     "validate:hook": "node dist/hooks/index.js",
     "watch:scenarios": "node dist/hooks/index.js --watch",
@@ -17,6 +18,10 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.6.0"
   }
 }
