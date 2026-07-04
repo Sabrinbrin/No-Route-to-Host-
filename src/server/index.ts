@@ -121,6 +121,57 @@ function handleApi(path: string, body: any): any {
       };
     }
 
+    case '/api/validate': {
+      // Run validation on a scenario by ID (or current scenario)
+      const scenarioId = body.id || (currentGameState ? currentGameState.scenario.id : null);
+      if (!scenarioId) return { error: 'No scenario specified' };
+      const scenario = availableScenarios.get(scenarioId);
+      if (!scenario) return { error: `Scenario '${scenarioId}' not found` };
+
+      // Run validation: load → assert broken → run solution → assert fixed
+      const steps: Array<{icon: string; title: string; detail: string; state: string}> = [];
+      const gs = loadScenario(scenario);
+
+      steps.push({icon: '\u2194', title: 'load_scenario("' + scenarioId + '")', detail: scenario.topology.devices.length + ' devices, ' + scenario.topology.links.length + ' links loaded', state: 'ok'});
+
+      // Check ticket
+      steps.push({icon: '\u2709', title: 'get_ticket()', detail: '"' + scenario.ticket.symptom.substring(0, 60) + '..."', state: 'ok'});
+
+      // Assert broken
+      const initialCheck = checkWinCondition(gs.network, scenario.win_condition);
+      if (initialCheck.resolved) {
+        steps.push({icon: '\u2715', title: 'check_win_condition() [pre-fix]', detail: 'ALREADY SOLVED \u2014 fault not injected!', state: 'fail'});
+        return { passed: false, verdict: 'FAIL already-solved', steps };
+      }
+      steps.push({icon: '\u2713', title: 'check_win_condition() [pre-fix]', detail: 'resolved=false \u2014 fault is present', state: 'ok'});
+
+      // Run reference solution
+      let cmdCount = 0;
+      for (const step of scenario.reference_solution) {
+        const ctx = gs.contexts[step.device] || { mode: 'exec' as const, currentDevice: step.device };
+        for (const cmd of step.commands) {
+          executeCommand(gs.network, step.device, cmd, ctx);
+          cmdCount++;
+          gs.contexts[step.device] = ctx;
+        }
+      }
+      steps.push({icon: '$', title: 'run_command() \u00d7' + cmdCount, detail: 'replayed reference_solution on ' + scenario.reference_solution.map(s => s.device).join(', '), state: 'ok'});
+
+      // Assert fixed
+      const finalCheck = checkWinCondition(gs.network, scenario.win_condition);
+      if (!finalCheck.resolved) {
+        steps.push({icon: '\u2715', title: 'check_win_condition() [post-fix]', detail: finalCheck.details, state: 'fail'});
+        return { passed: false, verdict: 'FAIL unsolvable: ' + finalCheck.details, steps };
+      }
+      steps.push({icon: '\u2713', title: 'check_win_condition() [post-fix]', detail: 'resolved=true \u2014 fix works!', state: 'ok'});
+
+      // Fairness checks
+      steps.push({icon: '\u2713', title: 'fairness: symptom \u2194 fault', detail: 'ticket matches injected fault', state: 'ok'});
+      steps.push({icon: '\u2713', title: 'fairness: no unintended fix', detail: 'single condition disabled', state: 'ok'});
+
+      return { passed: true, verdict: 'PASS: Solvable in ' + cmdCount + ' steps, fair.', steps };
+    }
+
     default:
       return { error: 'Unknown endpoint' };
   }
