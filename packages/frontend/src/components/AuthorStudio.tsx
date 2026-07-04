@@ -312,6 +312,7 @@ export function AuthorStudio() {
             autoCorrect="off"
             autoCapitalize="off"
             placeholder="Write your scenario YAML here..."
+            aria-label="Scenario YAML editor"
           />
         </div>
 

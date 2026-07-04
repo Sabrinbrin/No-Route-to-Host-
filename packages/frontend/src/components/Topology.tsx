@@ -70,7 +70,7 @@ export function Topology({ network, solved, activeDevice, onDevice }: { network:
 
       {/* SVG Topology Diagram */}
       <div style={{ marginTop: 10, position: 'relative' }}>
-        <svg width="100%" height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ display: 'block' }}>
+        <svg width="100%" height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ display: 'block' }} role="img" aria-label="Network topology diagram — click a device to switch terminal">
           {/* Draw links */}
           {links.map((link) => {
             const from = positions.get(link.from.device);
@@ -100,7 +100,7 @@ export function Topology({ network, solved, activeDevice, onDevice }: { network:
             const ip = d.interfaces.find(i => i.ip)?.ip || d.routing.svis?.[0]?.ip || '';
             const isActive = d.id === activeDevice;
             return (
-              <g key={d.id} onClick={() => onDevice?.(d.id)} style={{ cursor: onDevice ? 'pointer' : 'default' }}>
+              <g key={d.id} onClick={() => onDevice?.(d.id)} onKeyDown={(e: any) => { if ((e.key === 'Enter' || e.key === ' ') && onDevice) { e.preventDefault(); onDevice(d.id); }}} tabIndex={onDevice ? 0 : undefined} role={onDevice ? 'button' : undefined} aria-label={`Switch to ${d.hostname} (${d.type})`} style={{ cursor: onDevice ? 'pointer' : 'default', outline: 'none' }}>
                 {/* Device circle */}
                 <circle
                   cx={pos.x}

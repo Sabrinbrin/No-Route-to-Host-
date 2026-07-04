@@ -329,5 +329,5 @@ export function TerminalView({ session, device, hostname, onWin }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device]);
 
-  return <div className="term-host" ref={hostRef} />;
+  return <div className="term-host" ref={hostRef} role="application" aria-label={`Terminal: ${ctx.current.hostname} console. Type commands and press Enter.`} />;
 }
