@@ -89,9 +89,6 @@ export function App() {
         )}
       </div>
 
-      <footer style={{ padding: '16px 22px', textAlign: 'center', fontSize: 12, color: '#8b949e', borderTop: '1px solid var(--border)' }}>
-        Built by <a href="https://github.com/Sabrinbrin" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>@Sabrinbrin</a> with Kiro
-      </footer>
 
       {solved && session && (
         <Debrief
