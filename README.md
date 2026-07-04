@@ -10,15 +10,13 @@ The twist: **Kiro plays every scenario first** driving the simulation through a 
 
 ---
 
-## 30-Second Demo
+## Demo Video
 
 <p align="center">
   <a href="https://youtu.be/2pMVWWb8Evg">
     <img src="https://img.shields.io/badge/▶_Watch_Demo-Gameplay-red?style=for-the-badge&logo=youtube" alt="Watch Gameplay Demo" />
   </a>
 </p>
-
-> **Play loop:** Pick up a ticket → investigate with `show vlan brief` → spot the wrong VLAN → fix with `sw acc vlan 10` → link goes green → ticket resolved.
 
 ---
 
