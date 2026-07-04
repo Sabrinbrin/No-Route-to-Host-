@@ -1,5 +1,7 @@
 # No Route to Host
 
+> **[▶ Play it live](https://sabrinbrin.github.io/No-Route-to-Host-/)** — no install needed, runs entirely in your browser.
+
 **A diagnostic-training platform for network engineers, where Kiro validates every scenario before a student ever sees it.**
 
 You're the on-call engineer. A broken network, a vague ticket, a ticking clock. Diagnose it through a real vendor CLI. Fix the one misconfiguration. Beat the clock.
