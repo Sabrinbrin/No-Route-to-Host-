@@ -1,6 +1,3 @@
-Here's the complete corrected README. Every number matches your `origin/main` source. Paste it over your current `README.md`.
-
-```markdown
 # No Route to Host
 
 > **[▶ Play it live](https://sabrinbrin.github.io/No-Route-to-Host-/)** — no install needed, runs entirely in your browser.
@@ -239,4 +236,3 @@ MIT
 ---
 
 Built by [@Sabrinbrin](https://github.com/Sabrinbrin) with [Kiro](https://kiro.dev)
-```
