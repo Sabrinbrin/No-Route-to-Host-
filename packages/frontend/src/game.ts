@@ -10,7 +10,14 @@ import {
   checkWinCondition,
   executeCommand,
   parseScenario,
+  validateScenario,
+  type FairnessVerdict,
+  type ValidationReport,
 } from '@nrth/engine';
+
+// Re-export validation types from engine (single source of truth)
+export type { FairnessVerdict, ValidationReport };
+export { validateScenario };
 
 // Bundle every scenario YAML at build time (single source of truth: scenarios/).
 const rawScenarios = import.meta.glob('../../../scenarios/*.yaml', {
@@ -30,20 +37,6 @@ export interface CommandOutcome {
   stateChanged: boolean;
   mode: string;
   won: boolean;
-}
-
-export type FairnessVerdict =
-  | 'PASS'
-  | 'already-solved'
-  | 'unsolvable'
-  | 'symptom-mismatch'
-  | 'unintended-solution';
-
-export interface ValidationReport {
-  passed: boolean;
-  verdict: FairnessVerdict;
-  steps: number;
-  details: string;
 }
 
 const scenarios: Map<string, Scenario> = new Map();
@@ -119,68 +112,8 @@ export class GameSession {
   reset() {
     this.state = loadScenario(this.scenario);
     this.solved = false;
-  }
-}
 
-/**
- * Author Studio: validate a scenario is SOLVABLE and FAIR entirely in-browser
- * using the shared engine — the same checks the CI validator runs.
- */
-export function validateScenario(scenario: Scenario): ValidationReport {
-  const win = scenario.win_condition;
 
-  // already-solved
-  let game = loadScenario(scenario);
-  if (checkWinCondition(game.network, win).resolved) {
-    return { passed: false, verdict: 'already-solved', steps: 0, details: 'Win condition already satisfied before any fix.' };
-  }
 
-  // symptom-mismatch
-  if (!scenario.ticket.symptom?.trim()) {
-    return { passed: false, verdict: 'symptom-mismatch', steps: 0, details: 'Ticket has no symptom.' };
   }
-  const affected = scenario.ticket.affected_hosts || [];
-  if (affected.length > 0 && !affected.includes(win.source)) {
-    return {
-      passed: false,
-      verdict: 'symptom-mismatch',
-      steps: 0,
-      details: `Win source '${win.source}' is not in affected_hosts [${affected.join(', ')}].`,
-    };
-  }
-
-  // unintended-solution: read-only investigation must not win
-  const probe = loadScenario(scenario);
-  for (const d of probe.network.devices) {
-    const ctx = { mode: 'exec' as const, currentDevice: d.id };
-    for (const cmd of ['show running-config', 'show ip route', `ping ${win.destination}`]) {
-      executeCommand(probe.network, d.id, cmd, ctx);
-    }
-  }
-  if (checkWinCondition(probe.network, win).resolved) {
-    return { passed: false, verdict: 'unintended-solution', steps: 0, details: 'Read-only investigation resolved the win.' };
-  }
-
-  // unsolvable + the fix must change state
-  game = loadScenario(scenario);
-  let steps = 0;
-  let changed = false;
-  for (const step of scenario.reference_solution) {
-    const ctx = game.contexts[step.device] || { mode: 'exec' as const, currentDevice: step.device };
-    for (const command of step.commands) {
-      const r = executeCommand(game.network, step.device, command, ctx);
-      if (r.stateChanged) changed = true;
-      steps++;
-      game.contexts[step.device] = ctx;
-    }
-  }
-  const final = checkWinCondition(game.network, win);
-  if (!final.resolved) {
-    return { passed: false, verdict: 'unsolvable', steps, details: `Win not met after reference solution: ${final.details}` };
-  }
-  if (!changed) {
-    return { passed: false, verdict: 'unintended-solution', steps, details: 'Reference solution changed no state.' };
-  }
-
-  return { passed: true, verdict: 'PASS', steps, details: `Solvable in ${steps} steps, fair.` };
 }

@@ -106,8 +106,8 @@ export function Topology({ network, solved, activeDevice, onDevice }: { network:
                   cx={pos.x}
                   cy={pos.y}
                   r={16}
-                  fill={isActive ? 'rgba(88,166,255,.15)' : '#161b22'}
-                  stroke={isActive ? '#58a6ff' : solved ? 'var(--green)' : '#30363d'}
+                  fill={isActive ? 'rgba(88,166,255,.15)' : '#fef9e7'}
+                  stroke={isActive ? '#58a6ff' : solved ? 'var(--green)' : '#d4a017'}
                   strokeWidth={isActive ? 2.5 : 1.5}
                   style={{ transition: 'stroke 0.3s ease, fill 0.3s ease' }}
                 />

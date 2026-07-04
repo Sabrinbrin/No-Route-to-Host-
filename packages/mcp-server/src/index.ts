@@ -17,6 +17,7 @@ import {
   checkWinCondition,
   parseScenario,
   executeCommand,
+  validateScenario,
 } from '@nrth/engine';
 
 // ===== Server State =====
@@ -168,6 +169,28 @@ server.registerTool(
   'reset_scenario',
   { description: 'Reset the current scenario to its initial broken state.', inputSchema: {} },
   async () => asText(handleResetScenario())
+);
+
+server.registerTool(
+  'validate_scenario',
+  {
+    description: 'Validate that a scenario is SOLVABLE and FAIR. Runs the full fairness gate: asserts fault present, executes reference solution, asserts fix works, checks for symptom mismatch and unintended solutions. Same logic as CI and the on-save hook.',
+    inputSchema: {
+      id: z.string().describe('Scenario ID to validate (or omit to validate the currently loaded scenario)').optional(),
+    },
+  },
+  async ({ id }) => {
+    const scenarioId = id || currentGameState?.scenario.id;
+    if (!scenarioId) return asText({ error: 'No scenario specified. Provide an id or load a scenario first.' });
+    const scenario = availableScenarios.get(scenarioId);
+    if (!scenario) return asText({ error: `Scenario '${scenarioId}' not found.` });
+    const report = validateScenario(scenario);
+    return asText({
+      scenarioId,
+      title: scenario.title,
+      ...report,
+    });
+  }
 );
 
 // ===== Main =====
