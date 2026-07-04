@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>No Route to Host</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0d1117; --bg-secondary: #161b22; --border: #30363d;
+      --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
+      --red: #f85149; --green: #3fb950; --yellow: #d29922;
+      --orange: #db6d28; --terminal-bg: #010409;
+    }
+    html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+    #app { display: grid; grid-template-rows: 48px 1fr; grid-template-columns: 1fr 380px; height: 100vh; gap: 1px; background: var(--border); }
+    header { grid-column: 1 / -1; background: var(--bg-secondary); display: flex; align-items: center; padding: 0 16px; gap: 16px; }
+    header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
+    header .stats { margin-left: auto; font-size: 13px; color: var(--text-dim); display: flex; gap: 16px; }
+    header .stats span { font-variant-numeric: tabular-nums; }
+
+    #terminal-panel { background: var(--terminal-bg); display: flex; flex-direction: column; overflow: hidden; }
+    #sidebar { background: var(--bg-secondary); display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Ticket */
+    #ticket { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    #ticket h3 { font-size: 13px; color: var(--red); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    #ticket .title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    #ticket .symptom { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
+    /* Topology */
+    #topology { flex: 1; padding: 8px; overflow: hidden; }
+    #topology svg { width: 100%; height: 100%; }
+    .device-node { cursor: pointer; }
+    .device-label { font-size: 11px; fill: var(--text); font-family: monospace; text-anchor: middle; }
+    .device-type { font-size: 9px; fill: var(--text-dim); font-family: sans-serif; text-anchor: middle; }
+    .link-line { stroke-width: 2.5; transition: stroke 0.5s ease; }
+    .link-healthy { stroke: var(--green); }
+    .link-broken { stroke: var(--red); }
+    .link-unknown { stroke: var(--border); }
+
+    /* Terminal */
+    #terminal-container { flex: 1; overflow-y: auto; padding: 8px 12px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.6; }
+    #terminal-container .output-line { white-space: pre-wrap; word-break: break-all; }
+    #terminal-container .output-line.cmd { color: var(--accent); }
+    #terminal-container .output-line.error { color: var(--red); }
+    #terminal-container .output-line.success { color: var(--green); }
+    #terminal-container .output-line.info { color: var(--text-dim); }
+
+    #input-area { display: flex; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--bg-secondary); gap: 8px; }
+    #prompt { font-family: monospace; font-size: 13px; color: var(--green); white-space: nowrap; }
+    #cmd-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: monospace; font-size: 13px; caret-color: var(--accent); }
+
+    /* Device selector */
+    #device-selector { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--bg); flex-wrap: wrap; }
+    .device-btn { padding: 3px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary); color: var(--text-dim); font-size: 11px; cursor: pointer; font-family: monospace; }
+    .device-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,0.1); }
+    .device-btn:hover { border-color: var(--text-dim); }
+
+    /* Scenario picker */
+    #scenario-picker { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    #scenario-picker.hidden { display: none; }
+    #scenario-list { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; }
+    #scenario-list h2 { font-size: 18px; margin-bottom: 16px; text-align: center; }
+    .scenario-card { padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s; }
+    .scenario-card:hover { border-color: var(--accent); }
+    .scenario-card .sc-title { font-weight: 600; font-size: 14px; }
+    .scenario-card .sc-diff { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* Victory overlay */
+    #victory { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 200; }
+    #victory.hidden { display: none; }
+    #victory-content { background: var(--bg-secondary); border: 2px solid var(--green); border-radius: 12px; padding: 32px; text-align: center; }
+    #victory-content h2 { color: var(--green); font-size: 24px; margin-bottom: 12px; }
+    #victory-content .score { font-size: 16px; margin-bottom: 8px; }
+    #victory-content .grade { font-size: 48px; font-weight: bold; margin: 12px 0; }
+    #victory-content button { margin-top: 16px; padding: 8px 24px; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>NO ROUTE TO HOST</h1>
+    <div class="stats">
+      <span id="stat-time">00:00</span>
+      <span id="stat-cmds">0 cmds</span>
+    </div>
+  </header>
+  <div id="terminal-panel">
+    <div id="device-selector"></div>
+    <div id="terminal-container"></div>
+    <div id="input-area">
+      <span id="prompt">SW1#</span>
+      <input id="cmd-input" type="text" autocomplete="off" spellcheck="false" autofocus>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div id="ticket">
+      <h3>Trouble Ticket</h3>
+      <div class="title" id="ticket-title">Select a scenario to begin...</div>
+      <div class="symptom" id="ticket-symptom"></div>
+    </div>
+    <div id="topology">
+      <svg id="topo-svg" viewBox="0 0 600 300"></svg>
+    </div>
+  </div>
+</div>
+
+<div id="scenario-picker">
+  <div id="scenario-list">
+    <h2>Select a Scenario</h2>
+    <div id="scenarios-container"></div>
+  </div>
+</div>
+
+<div id="victory" class="hidden">
+  <div id="victory-content">
+    <h2>Ticket Resolved!</h2>
+    <div class="score" id="v-time"></div>
+    <div class="score" id="v-cmds"></div>
+    <div class="grade" id="v-grade"></div>
+    <button onclick="showPicker()">Next Scenario</button>
+  </div>
+</div>
+
+<script>
+// ===== State =====
+let currentDevice = '';
+let devices = [];
+let commandHistory = [];
+let historyIdx = -1;
+let timerInterval = null;
+let startTime = 0;
+let commandCount = 0;
+let topology = null;
+let layout = {};
+
+// ===== API =====
+async function api(path, body = {}) {
+  const res = await fetch('/api/' + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+// ===== Scenario Picker =====
+async function loadScenarios() {
+  const res = await fetch('/api/scenarios');
+  const scenarios = await res.json();
+  const container = document.getElementById('scenarios-container');
+  container.innerHTML = scenarios.map(s => `
+    <div class="scenario-card" onclick="selectScenario('${s.id}')">
+      <div class="sc-title">${s.title}</div>
+      <div class="sc-diff">${'★'.repeat(s.difficulty)}${'☆'.repeat(5 - s.difficulty)} Difficulty ${s.difficulty}/5</div>
+    </div>
+  `).join('');
+}
+
+function showPicker() {
+  document.getElementById('scenario-picker').classList.remove('hidden');
+  document.getElementById('victory').classList.add('hidden');
+}
+
+async function selectScenario(id) {
+  document.getElementById('scenario-picker').classList.add('hidden');
+  const result = await api('load', { id });
+  if (result.error) { alert(result.error); return; }
+
+  // Set up game
+  topology = result.topology;
+  layout = result.layout;
+  devices = topology.devices.map(d => ({ id: d.id, hostname: d.hostname, type: d.type }));
+  currentDevice = devices.find(d => d.type === 'switch' || d.type === 'router')?.id || devices[0].id;
+  commandCount = 0;
+  commandHistory = [];
+  startTime = Date.now();
+
+  // UI
+  document.getElementById('ticket-title').textContent = result.ticket.title;
+  document.getElementById('ticket-symptom').textContent = result.ticket.symptom;
+  document.getElementById('terminal-container').innerHTML = '';
+  appendOutput(`Welcome, engineer. You've been paged.\n`, 'info');
+  appendOutput(`Ticket: ${result.ticket.title}\n`, 'error');
+  appendOutput(`${result.ticket.symptom}\n\n`, 'info');
+  appendOutput(`Connected devices: ${devices.map(d => d.hostname).join(', ')}\n`, 'info');
+  appendOutput(`You are on: ${getHostname(currentDevice)}\n`, 'info');
+  appendOutput(`Type commands below. Use device buttons to switch.\n\n`, 'info');
+
+  renderDeviceSelector();
+  renderTopology();
+  updatePrompt();
+  startTimer();
+  document.getElementById('cmd-input').focus();
+}
+
+// ===== Terminal =====
+function appendOutput(text, cls = '') {
+  const container = document.getElementById('terminal-container');
+  const line = document.createElement('div');
+  line.className = 'output-line' + (cls ? ' ' + cls : '');
+  line.textContent = text;
+  container.appendChild(line);
+  container.scrollTop = container.scrollHeight;
+}
+
+function getHostname(deviceId) {
+  const d = devices.find(x => x.id === deviceId);
+  return d ? d.hostname : deviceId;
+}
+
+function updatePrompt() {
+  document.getElementById('prompt').textContent = getHostname(currentDevice) + '# ';
+}
+
+document.getElementById('cmd-input').addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter') {
+    const input = e.target.value.trim();
+    e.target.value = '';
+    if (!input) return;
+
+    commandHistory.push(input);
+    historyIdx = commandHistory.length;
+    appendOutput(`${getHostname(currentDevice)}# ${input}`, 'cmd');
+
+    const result = await api('command', { device: currentDevice, command: input });
+    if (result.error) { appendOutput(result.error, 'error'); return; }
+
+    if (result.output) appendOutput(result.output);
+    commandCount = result.commandCount || commandCount + 1;
+    document.getElementById('stat-cmds').textContent = commandCount + ' cmds';
+
+    // Update prompt based on mode
+    if (result.context) {
+      const mode = result.context.mode;
+      const hn = getHostname(currentDevice);
+      if (mode === 'config') document.getElementById('prompt').textContent = hn + '(config)# ';
+      else if (mode === 'config-if') document.getElementById('prompt').textContent = hn + '(config-if)# ';
+      else document.getElementById('prompt').textContent = hn + '# ';
+    }
+
+    // Update topology if state changed
+    if (result.stateChanged && result.topology) {
+      topology = result.topology;
+      renderTopology();
+    }
+
+    // Win!
+    if (result.winCheck && result.winCheck.resolved) {
+      showVictory();
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (historyIdx > 0) { historyIdx--; e.target.value = commandHistory[historyIdx]; }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (historyIdx < commandHistory.length - 1) { historyIdx++; e.target.value = commandHistory[historyIdx]; }
+    else { historyIdx = commandHistory.length; e.target.value = ''; }
+  }
+});
+
+// ===== Device Selector =====
+function renderDeviceSelector() {
+  const container = document.getElementById('device-selector');
+  container.innerHTML = devices.map(d => `
+    <button class="device-btn ${d.id === currentDevice ? 'active' : ''}" onclick="switchDevice('${d.id}')">
+      ${d.hostname}
+    </button>
+  `).join('');
+}
+
+function switchDevice(id) {
+  currentDevice = id;
+  renderDeviceSelector();
+  updatePrompt();
+  appendOutput(`\n--- Switched to ${getHostname(id)} ---\n`, 'info');
+  document.getElementById('cmd-input').focus();
+}
+
+// ===== Topology Rendering =====
+function renderTopology() {
+  if (!topology) return;
+  const svg = document.getElementById('topo-svg');
+
+  // Calculate positions
+  const positions = {};
+  const deviceList = topology.devices;
+  const n = deviceList.length;
+
+  deviceList.forEach((d, i) => {
+    if (layout[d.id]) {
+      positions[d.id] = layout[d.id];
+    } else {
+      // Auto-layout in a circle
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+      positions[d.id] = { x: 300 + 180 * Math.cos(angle), y: 150 + 100 * Math.sin(angle) };
+    }
+  });
+
+  let svgContent = '';
+
+  // Draw links
+  for (const link of topology.links) {
+    const from = positions[link.from.device];
+    const to = positions[link.to.device];
+    if (!from || !to) continue;
+
+    // Determine link health (check if any reachability issues on this segment)
+    const linkClass = getLinkClass(link);
+    svgContent += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="link-line ${linkClass}" />`;
+  }
+
+  // Draw devices
+  for (const d of deviceList) {
+    const pos = positions[d.id];
+    if (!pos) continue;
+    const icon = getDeviceIcon(d.type);
+    const isActive = d.id === currentDevice;
+    svgContent += `
+      <g class="device-node" onclick="switchDevice('${d.id}')">
+        <rect x="${pos.x - 28}" y="${pos.y - 20}" width="56" height="40" rx="6"
+              fill="${isActive ? 'rgba(88,166,255,0.15)' : 'rgba(255,255,255,0.05)'}"
+              stroke="${isActive ? '#58a6ff' : '#30363d'}" stroke-width="1.5"/>
+        <text x="${pos.x}" y="${pos.y - 3}" class="device-label">${icon}</text>
+        <text x="${pos.x}" y="${pos.y + 10}" class="device-type">${d.hostname}</text>
+      </g>
+    `;
+  }
+
+  svg.innerHTML = svgContent;
+}
+
+function getDeviceIcon(type) {
+  switch (type) {
+    case 'switch': return '&#9633;';   // Box
+    case 'router': return '&#9678;';   // Circle
+    case 'firewall': return '&#9650;'; // Triangle
+    case 'host': return '&#9634;';     // Small box
+    default: return '?';
+  }
+}
+
+function getLinkClass(link) {
+  // Simple heuristic: check if devices on both ends have reachability issues
+  // For now, mark links based on whether connected interfaces are up
+  if (!topology) return 'link-unknown';
+  const fromDev = topology.devices.find(d => d.id === link.from.device);
+  const toDev = topology.devices.find(d => d.id === link.to.device);
+  if (!fromDev || !toDev) return 'link-unknown';
+
+  const fromIface = fromDev.interfaces.find(i => i.name === link.from.interface);
+  const toIface = toDev.interfaces.find(i => i.name === link.to.interface);
+
+  if (fromIface && fromIface.status === 'down') return 'link-broken';
+  if (toIface && toIface.status === 'down') return 'link-broken';
+
+  // Check VLAN mismatch for access ports connected to hosts
+  if (fromDev.type === 'host' && toIface && toIface.mode === 'access') {
+    // Check if host gateway matches the SVI for that VLAN
+    const hostIf = fromDev.interfaces[0];
+    if (hostIf && hostIf.gateway) {
+      const svi = toDev.routing?.svis?.find(s => s.vlan === toIface.accessVlan);
+      if (svi && svi.ip !== hostIf.gateway) return 'link-broken';
+      if (svi && svi.status === 'down') return 'link-broken';
+    }
+  }
+  if (toDev.type === 'host' && fromIface && fromIface.mode === 'access') {
+    const hostIf = toDev.interfaces[0];
+    if (hostIf && hostIf.gateway) {
+      const svi = fromDev.routing?.svis?.find(s => s.vlan === fromIface.accessVlan);
+      if (svi && svi.ip !== hostIf.gateway) return 'link-broken';
+      if (svi && svi.status === 'down') return 'link-broken';
+    }
+  }
+
+  return 'link-healthy';
+}
+
+// ===== Timer =====
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const secs = String(elapsed % 60).padStart(2, '0');
+    document.getElementById('stat-time').textContent = `${mins}:${secs}`;
+  }, 1000);
+}
+
+// ===== Victory =====
+function showVictory() {
+  if (timerInterval) clearInterval(timerInterval);
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  document.getElementById('v-time').textContent = `Time: ${elapsed}s`;
+  document.getElementById('v-cmds').textContent = `Commands: ${commandCount}`;
+
+  // Grade: A = fast+few, D = slow+many
+  let grade = 'A';
+  if (elapsed > 120 || commandCount > 15) grade = 'B';
+  if (elapsed > 240 || commandCount > 25) grade = 'C';
+  if (elapsed > 360 || commandCount > 40) grade = 'D';
+  document.getElementById('v-grade').textContent = grade;
+  document.getElementById('v-grade').style.color = grade === 'A' ? 'var(--green)' : grade === 'B' ? 'var(--accent)' : grade === 'C' ? 'var(--yellow)' : 'var(--red)';
+
+  document.getElementById('victory').classList.remove('hidden');
+}
+
+// ===== Init =====
+loadScenarios();
+</script>
+</body>
+</html>
