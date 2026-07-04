@@ -199,3 +199,18 @@ layout:
   file-server:
     x: 520
     'y': 80
+
+
+explanation:
+  why: >-
+    Windows Firewall had an "ICMP Echo Request" allow rule, but it was disabled (Enabled=False).
+    The Domain profile default is Block Inbound, so without an active allow rule, ICMP was
+    silently dropped. Re-enabling the rule restored ping.
+  concept: >-
+    Windows Firewall evaluates rules per-profile (Domain/Private/Public). Rules can exist but be
+    disabled — "Get-NetFirewallRule" shows the Enabled status. Group Policy refreshes can disable
+    rules, especially after domain migrations.
+  production: >-
+    After GP refreshes or domain changes, check "Get-NetFirewallRule | Where Enabled -eq False"
+    for recently disabled rules. In production, also check if the firewall profile changed
+    (Domain to Public) which applies different default rules.

@@ -178,3 +178,17 @@ layout:
   app-server:
     x: 500
     'y': 80
+
+
+explanation:
+  why: >-
+    The security group on the app server only allowed TCP/443 inbound. ICMP (ping) was not in
+    the inbound rules, so the VPC silently dropped the ping packets before they reached the instance.
+  concept: >-
+    AWS Security Groups are stateful firewalls at the instance level. They default-deny all
+    inbound traffic. Each protocol/port must be explicitly allowed. "Stateful" means you only
+    need an inbound rule — return traffic is automatically allowed.
+  production: >-
+    This is the most common AWS connectivity issue. Use VPC Flow Logs to confirm traffic is
+    being rejected at the SG level. Remember: SGs are stateful (no need for outbound rules for
+    return traffic), but NACLs are stateless (you need both directions).

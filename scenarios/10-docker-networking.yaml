@@ -170,3 +170,18 @@ layout:
   docker-host:
     x: 520
     'y': 80
+
+
+explanation:
+  why: >-
+    An iptables flush removed all rules including the ICMP accept in the INPUT chain. With
+    policy DROP, the host became unreachable from the network. Docker's own FORWARD chain rules
+    survived (containers work internally) but host-level INPUT was empty.
+  concept: >-
+    Docker heavily uses iptables for its networking (NAT, port mapping, container isolation).
+    Flushing iptables to "fix" Docker issues often breaks host connectivity because it removes
+    ALL rules while keeping restrictive chain policies.
+  production: >-
+    Never "iptables -F" on a production Docker host without checking chain policies first. Use
+    "iptables-save" to backup before changes. Better: use "docker network" commands to
+    troubleshoot Docker networking, not raw iptables.

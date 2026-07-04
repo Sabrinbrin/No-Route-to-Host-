@@ -193,6 +193,30 @@ server.registerTool(
   }
 );
 
+server.registerTool(
+  'validate_all',
+  {
+    description: 'Validate ALL scenarios are SOLVABLE and FAIR in a single call. Returns a summary with per-scenario verdicts and an overall pass/fail. Same logic as the CI gate (npm run validate).',
+    inputSchema: {},
+  },
+  async () => {
+    const results: Array<{ id: string; title: string; passed: boolean; verdict: string; steps: number; details: string }> = [];
+    for (const [id, scenario] of availableScenarios) {
+      const report = validateScenario(scenario);
+      results.push({ id, title: scenario.title, passed: report.passed, verdict: report.verdict, steps: report.steps, details: report.details });
+    }
+    const passCount = results.filter(r => r.passed).length;
+    const allPassed = passCount === results.length;
+    return asText({
+      total: results.length,
+      passed: passCount,
+      failed: results.length - passCount,
+      allPassed,
+      results,
+    });
+  }
+);
+
 // ===== MCP Resources & Prompts: registered after scenarios load =====
 
 function registerResourcesAndPrompts(): void {
@@ -283,7 +307,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('[MCP] No Route to Host MCP server started (stdio transport)');
-  console.error(`[MCP] ${availableScenarios.size} scenarios loaded as resources, 3 prompts, 8 tools`);
+  console.error(`[MCP] ${availableScenarios.size} scenarios loaded as resources, 3 prompts, 9 tools`);
 }
 
 main().catch((e) => {

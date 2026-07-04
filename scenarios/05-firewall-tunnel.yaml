@@ -155,3 +155,19 @@ layout:
   branch-host:
     x: 550
     'y': 80
+
+
+explanation:
+  why: >-
+    The IPsec tunnel was established (Phase 1 + Phase 2 up), but the branch firewall had no
+    policy permitting traffic FROM the HQ subnet TO the branch subnet through the tunnel
+    interface. Firewalls are default-deny — no policy means no traffic.
+  concept: >-
+    VPN tunnels separate the crypto plane (tunnel establishment) from the traffic plane (what's
+    allowed through). A tunnel being "up" only means the devices agreed on encryption — it
+    doesn't mean traffic is permitted. Firewall policies must explicitly allow the desired
+    traffic flows.
+  production: >-
+    This is the #1 "tunnel up but no traffic" issue in production. Verify with packet captures
+    on the tunnel interface and check policy hit counters. Also watch for asymmetric policies —
+    both sides need to permit the traffic.

@@ -127,3 +127,18 @@ layout:
   external-host:
     x: 570
     'y': 100
+
+
+explanation:
+  why: >-
+    The core router had no default route (0.0.0.0/0) pointing upstream. Internal routing worked
+    because those subnets were directly connected, but any traffic destined for the internet had
+    nowhere to go.
+  concept: >-
+    A default route is the "route of last resort" — it matches any destination not covered by
+    more specific routes. Without it, the router drops traffic to unknown destinations with
+    "no route to host." It's the most critical single route in any network.
+  production: >-
+    Default routes disappear after router reloads (if not saved), during routing protocol issues,
+    or when a static route's next-hop becomes unreachable. Always check "show ip route" first —
+    it's the fastest way to spot missing routes.

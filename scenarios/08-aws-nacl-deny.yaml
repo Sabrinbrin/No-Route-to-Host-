@@ -214,3 +214,18 @@ layout:
   api-server:
     x: 520
     'y': 80
+
+
+explanation:
+  why: >-
+    The NACL on the API subnet allowed TCP inbound (rule 100) but had no rule allowing ICMP
+    inbound. NACLs are stateless — unlike security groups, you need explicit rules for both the
+    request AND response directions.
+  concept: >-
+    Network ACLs are stateless subnet-level firewalls evaluated by rule number (lowest first).
+    Unlike Security Groups (stateful), NACLs require explicit allow rules in both directions. A
+    common mistake is adding a TCP allow but forgetting ICMP for ping.
+  production: >-
+    NACL issues are tricky because traffic works for some protocols but not others (since each
+    protocol needs its own rule). Check both inbound AND outbound rules. Use VPC Flow Logs with
+    "REJECT" filter to identify NACL blocks vs SG blocks.

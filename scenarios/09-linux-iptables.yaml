@@ -211,3 +211,18 @@ layout:
   web-server:
     x: 520
     'y': 80
+
+
+explanation:
+  why: >-
+    The iptables INPUT chain policy was DROP, and while rules existed for SSH (22) and HTTP
+    (80/443), the ICMP accept rule was removed during hardening. The firewall dropped ping
+    packets at the kernel level.
+  concept: >-
+    iptables processes rules top-to-bottom per chain. When no rule matches, the chain policy
+    applies (ACCEPT or DROP). A DROP policy with no ICMP rule means silent packet loss — the
+    sender gets no response, not even a "rejected" message.
+  production: >-
+    After iptables hardening, always test ICMP connectivity. Use "iptables -L -n -v" to see hit
+    counters on each rule — zero hits on an expected rule means traffic isn't reaching it. Order
+    matters: a DROP rule above your ACCEPT will win.

@@ -255,6 +255,13 @@ export interface Scenario {
   win_condition: WinCondition;
   reference_solution: SolutionStep[];
   layout?: Record<string, { x: number; y: number }>;
+  explanation?: ScenarioExplanation;
+}
+
+export interface ScenarioExplanation {
+  why: string;
+  concept: string;
+  production: string;
 }
 
 export interface InjectedFault {
