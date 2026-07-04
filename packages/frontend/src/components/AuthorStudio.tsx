@@ -366,7 +366,7 @@ export function AuthorStudio() {
               <div><b>injected_fault:</b> {'{'}device, field, value, action{'}'}</div>
               <div><b>ticket:</b> {'{'}title, symptom, affected_hosts{'}'}</div>
               <div><b>win_condition:</b> {'{'}type: ping, source, destination, expected{'}'}</div>
-              <div><b>reference_solution:</b> [{'{'}device, commands[]'}{'}]</div>
+              <div><b>reference_solution:</b> [{'{'}device, commands[]{'}'}]</div>
             </div>
           </div>
 
