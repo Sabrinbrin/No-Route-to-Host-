@@ -11,9 +11,9 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { Scenario, GameState, CommandContext } from '../engine/types.js';
-import { loadScenario, checkWinCondition, parseScenarioJson } from '../engine/scenario-loader.js';
-import { executeCommand } from '../engine/cli-parser.js';
+import { Scenario, GameState, CommandContext } from '@nrth/engine';
+import { loadScenario, checkWinCondition, parseScenarioJson } from '@nrth/engine';
+import { executeCommand } from '@nrth/engine';
 
 type Verdict = 'PASS' | 'already-solved' | 'unsolvable' | 'symptom-mismatch' | 'unintended-solution';
 

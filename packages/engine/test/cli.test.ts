@@ -1,6 +1,6 @@
 import { suite, test, assert, assertEqual } from './harness.js';
-import { executeCommand } from '../engine/cli-parser.js';
-import { NetworkState, CommandContext, Device } from '../engine/types.js';
+import { executeCommand } from '../src/cli-parser.js';
+import { NetworkState, CommandContext, Device } from '../src/types.js';
 
 suite('cli-parser');
 

@@ -9,13 +9,13 @@ import {
   Scenario,
   GameState,
   CommandContext,
-} from '../engine/types.js';
+} from '@nrth/engine';
 import {
   loadScenario,
   checkWinCondition,
   parseScenarioJson,
-} from '../engine/scenario-loader.js';
-import { executeCommand } from '../engine/cli-parser.js';
+} from '@nrth/engine';
+import { executeCommand } from '@nrth/engine';
 
 // ===== Session-Based State (supports concurrent users) =====
 interface Session {

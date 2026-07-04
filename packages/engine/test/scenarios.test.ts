@@ -1,10 +1,10 @@
 import { suite, test, assert, assertEqual } from './harness.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { loadScenario, checkWinCondition, parseScenarioJson } from '../engine/scenario-loader.js';
-import { executeCommand } from '../engine/cli-parser.js';
-import { evaluatePing } from '../engine/reachability.js';
-import { Scenario, CommandContext } from '../engine/types.js';
+import { loadScenario, checkWinCondition, parseScenarioJson } from '../src/scenario-loader.js';
+import { executeCommand } from '../src/cli-parser.js';
+import { evaluatePing } from '../src/reachability.js';
+import { Scenario, CommandContext } from '../src/types.js';
 
 suite('scenarios');
 

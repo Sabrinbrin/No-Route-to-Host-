@@ -1,6 +1,6 @@
 import { suite, test, assert, assertEqual } from './harness.js';
-import { evaluatePing } from '../engine/reachability.js';
-import { NetworkState, Device } from '../engine/types.js';
+import { evaluatePing } from '../src/reachability.js';
+import { NetworkState, Device } from '../src/types.js';
 
 suite('reachability');
 

@@ -1,0 +1,7 @@
+{
+  "name": "@nrth/server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": { "@nrth/engine": "*" }
+}

@@ -8,8 +8,8 @@ import {
   routeMatches,
   vlanAllowedOnTrunk,
   findInterface,
-} from '../engine/utils.js';
-import { Device } from '../engine/types.js';
+} from '../src/utils.js';
+import { Device } from '../src/types.js';
 
 suite('utils');
 

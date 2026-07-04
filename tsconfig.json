@@ -1,21 +1,10 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "paths": {
-      "@engine/*": ["./src/engine/*"]
-    }
-  },
-  "include": ["src/**/*", "src/**/*.d.ts"]
+  "files": [],
+  "references": [
+    { "path": "packages/engine" },
+    { "path": "packages/mcp-server" },
+    { "path": "packages/validator" },
+    { "path": "packages/hooks" },
+    { "path": "packages/server" }
+  ]
 }

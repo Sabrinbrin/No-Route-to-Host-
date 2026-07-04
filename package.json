@@ -1,28 +1,27 @@
 {
   "name": "no-route-to-host",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "A browser-based network troubleshooting game where the player is the on-call network engineer",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "vendor:assets": "node scripts/vendor-assets.mjs",
-    "test": "tsc -p tsconfig.json && node dist/tests/index.js",
-    "validate": "node dist/validator/index.js",
-    "validate:hook": "node dist/hooks/index.js",
-    "watch:scenarios": "node dist/hooks/index.js --watch",
-    "mcp": "node dist/mcp-server/index.js",
-    "start": "node dist/server/index.js"
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "tsc -b && node packages/engine/dist/test/index.js",
+    "validate": "tsc -b && node packages/validator/dist/index.js",
+    "validate:hook": "node packages/hooks/dist/index.js",
+    "watch:scenarios": "node packages/hooks/dist/index.js --watch",
+    "mcp": "node packages/mcp-server/dist/index.js",
+    "start": "node packages/server/dist/index.js"
   },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
-    "@fontsource/ibm-plex-mono": "^5.2.7",
-    "@fontsource/ibm-plex-sans": "^5.2.8",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "@types/node": "^22.7.0",
     "typescript": "^5.6.0"
   }
 }
