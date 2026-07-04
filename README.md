@@ -1,19 +1,19 @@
 # No Route to Host
 
-> **[▶ Play it live](https://sabrinbrin.github.io/No-Route-to-Host-/)** — no install needed, runs entirely in your browser.
+> **[▶ Play it live](https://sabrinbrin.github.io/No-Route-to-Host-/)** no install needed, runs entirely in your browser.
 
 **A diagnostic-training platform for network engineers, where Kiro validates every scenario before a student ever sees it.**
 
 You're the on-call engineer. A broken network, a vague ticket, a ticking clock. Diagnose it through a real vendor CLI. Fix the one misconfiguration. Beat the clock.
 
-The twist: **Kiro plays every scenario first** — driving the simulation through a self-built MCP server — to prove it's solvable and fair. Authoring a broken lab fails loudly and immediately.
+The twist: **Kiro plays every scenario first** driving the simulation through a self-built MCP server — to prove it's solvable and fair. Authoring a broken lab fails loudly and immediately.
 
 ---
 
 ## 30-Second Demo
 
 <p align="center">
-  <a href="https://youtu.be/YOUR_GAMEPLAY_VIDEO_ID">
+  <a href="https://youtu.be/2pMVWWb8Evg">
     <img src="https://img.shields.io/badge/▶_Watch_Demo-Gameplay-red?style=for-the-badge&logo=youtube" alt="Watch Gameplay Demo" />
   </a>
 </p>
@@ -21,52 +21,6 @@ The twist: **Kiro plays every scenario first** — driving the simulation throug
 > **Play loop:** Pick up a ticket → investigate with `show vlan brief` → spot the wrong VLAN → fix with `sw acc vlan 10` → link goes green → ticket resolved.
 
 ---
-
-## Demo Evidence: Kiro Validates via MCP
-
-### On-save hook: break a scenario → instant FAIL
-
-<p align="center">
-  <a href="https://youtu.be/YOUR_ONSAVE_HOOK_VIDEO_ID">
-    <img src="https://img.shields.io/badge/▶_Watch_Demo-On--Save_Hook-red?style=for-the-badge&logo=youtube" alt="Watch On-Save Hook Demo" />
-  </a>
-</p>
-
-```bash
-$ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
-  ✓ Wrong Access VLAN (wrong-access-vlan) — Solvable in 4 steps.
-
-# Now break the reference solution (change vlan 10 → vlan 99):
-$ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
-  ✗ Wrong Access VLAN (wrong-access-vlan) — FAIL unsolvable: Win not met after reference solution
-
-# Fix it back:
-$ node packages/hooks/dist/index.js scenarios/01-wrong-access-vlan.yaml
-  ✓ Wrong Access VLAN (wrong-access-vlan) — Solvable in 4 steps.
-```
-
-### MCP agent plays the game (validate_scenario tool)
-
-<p align="center">
-  <a href="https://youtu.be/YOUR_MCP_VALIDATE_VIDEO_ID">
-    <img src="https://img.shields.io/badge/▶_Watch_Demo-MCP_Validation-red?style=for-the-badge&logo=youtube" alt="Watch MCP Validation Demo" />
-  </a>
-</p>
-
-```bash
-$ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"validate_scenario","arguments":{"id":"wrong-access-vlan"}}}
-' | node packages/mcp-server/dist/index.js 2>/dev/null
-
-# Response:
-{
-  "scenarioId": "wrong-access-vlan",
-  "passed": true,
-  "verdict": "PASS",
-  "steps": 4,
-  "details": "Solvable in 4 steps, fair."
-}
-```
 
 ---
 
