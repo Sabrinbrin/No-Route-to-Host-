@@ -450,12 +450,18 @@ class Component extends DCLogic {
 
   async api(path, body = {}) {
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      // The server keeps game state per session; carry our session id so
+      // load → command → check all hit the same session.
+      if (this._sessionId) headers['x-session-id'] = this._sessionId;
       const res = await fetch(this.API + '/api/' + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       });
-      return await res.json();
+      const data = await res.json();
+      if (data && data.sessionId) this._sessionId = data.sessionId;
+      return data;
     } catch (e) {
       return { error: e.message || 'Network error' };
     }
@@ -505,11 +511,21 @@ class Component extends DCLogic {
   }
   componentWillUnmount(){ clearInterval(this._timer); clearInterval(this._mcpCheck); clearTimeout(this._at); }
 
+  // /api/scenarios returns either a bare array (older server) or
+  // { scenarios: [...], sessionId } (session-aware server) — accept both.
+  _scenarioArray(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.scenarios)) return data.scenarios;
+    return null;
+  }
+
   async checkMCPStatus() {
     try {
       const res = await fetch(this.API + '/api/scenarios', { method: 'GET' });
       const data = await res.json();
-      this.setState({ mcpOnline: Array.isArray(data) && data.length > 0 });
+      if (data && data.sessionId) this._sessionId = data.sessionId;
+      const list = this._scenarioArray(data);
+      this.setState({ mcpOnline: !!list && list.length > 0 });
     } catch(e) {
       this.setState({ mcpOnline: false });
     }
@@ -519,7 +535,9 @@ class Component extends DCLogic {
     try {
       const res = await fetch(this.API + '/api/scenarios');
       const data = await res.json();
-      if (Array.isArray(data)) this.setState({ scenarioList: data, mcpOnline: true });
+      if (data && data.sessionId) this._sessionId = data.sessionId;
+      const list = this._scenarioArray(data);
+      if (list) this.setState({ scenarioList: list, mcpOnline: true });
     } catch(e) {}
   }
 
