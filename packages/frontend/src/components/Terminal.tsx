@@ -10,7 +10,7 @@ interface Props {
   onWin: () => void;
 }
 
-const HELP = [
+const HELP_IOS = [
   'Commands (abbreviations work — e.g. sh ip int bri, conf t, sw acc vlan):',
   '  show interfaces | show ip route | show vlan brief | show running-config',
   '  show ip int brief | show firewall',
@@ -21,18 +21,76 @@ const HELP = [
   '  switchport trunk allowed vlan add <n>',
   '  ip routing | ip route <net> <mask> <nh>',
   '  no shutdown | shutdown | end | exit',
-  '  --- AWS ---',
-  '  aws ec2 describe-security-groups | authorize-security-group-ingress',
-  '  aws ec2 create-route | describe-route-tables | describe-network-acls',
-  '  --- Linux ---',
-  '  iptables -L | -A INPUT -p icmp -j ACCEPT | -D INPUT <n>',
-  '  systemctl status|start|stop <service> | cat /etc/resolv.conf',
-  '  docker ps | docker network ls',
-  '  --- Windows (PowerShell) ---',
-  '  Get-NetFirewallRule | New-NetFirewallRule | Set-NetFirewallRule',
   '',
-  'Tip: Use Tab for autocomplete. Abbreviations work everywhere.',
+  'Tip: Use Tab for autocomplete.',
 ];
+
+const HELP_LINUX = [
+  'Linux commands:',
+  '  ping <ip>                test reachability',
+  '  iptables -L [chain]      list firewall rules',
+  '  iptables -A INPUT -p icmp -s 0.0.0.0/0 -j ACCEPT    add rule',
+  '  iptables -D INPUT <num>  delete rule',
+  '  iptables -P INPUT DROP   set chain policy',
+  '  systemctl status|start|stop|restart <service>',
+  '  cat /etc/resolv.conf     show DNS config',
+  '  cat /etc/hosts           show hosts file',
+  '  docker ps                list containers',
+  '  docker network ls        list Docker networks',
+  '  docker start|stop <name> manage containers',
+  '',
+  'Tip: Use Tab for autocomplete.',
+];
+
+const HELP_WINDOWS = [
+  'PowerShell commands:',
+  '  ping <ip>                         test reachability',
+  '  Get-NetFirewallRule                list firewall rules',
+  '  New-NetFirewallRule -Name <n> -Direction Inbound -Action Allow -Protocol ICMPv4',
+  '  Set-NetFirewallRule -Name <n> -Enabled True',
+  '',
+  'Tip: Use Tab for autocomplete.',
+];
+
+const HELP_AWS = [
+  'AWS CLI commands:',
+  '  ping <ip>                              test reachability',
+  '  aws ec2 describe-security-groups       show security group rules',
+  '  aws ec2 describe-route-tables          show VPC route tables',
+  '  aws ec2 describe-network-acls          show NACLs',
+  '  aws ec2 describe-vpc-peering-connections',
+  '  aws ec2 authorize-security-group-ingress --group-id <id> --protocol icmp --cidr <cidr>',
+  '  aws ec2 authorize-security-group-egress --group-id <id> --protocol icmp --cidr <cidr>',
+  '  aws ec2 create-route --route-table-id <id> --destination-cidr <cidr> --target <tgt>',
+  '  aws ec2 create-network-acl-entry --network-acl-id <id> --rule-number <n> --protocol icmp --cidr-block <cidr> --rule-action allow --ingress',
+  '',
+  'Tip: Use Tab for autocomplete.',
+];
+
+const HELP_HOST = [
+  'Host commands:',
+  '  ping <ip>    test reachability to a destination',
+  '  ?            show this help',
+  '',
+  'Tip: Switch to a network device to run diagnostic commands.',
+];
+
+function getHelpForDevice(deviceType: string): string[] {
+  switch (deviceType) {
+    case 'linux-server':
+    case 'docker-host':
+      return HELP_LINUX;
+    case 'windows-server':
+      return HELP_WINDOWS;
+    case 'ec2':
+    case 'vpc-router':
+      return HELP_AWS;
+    case 'host':
+      return HELP_HOST;
+    default: // switch, router, firewall
+      return HELP_IOS;
+  }
+}
 
 // All known commands/keywords for autocomplete
 const COMPLETIONS = [
@@ -165,7 +223,9 @@ export function TerminalView({ session, device, hostname, onWin }: Props) {
     if (!cmd) {
       // nothing
     } else if (low === '?' || low === 'help') {
-      writeOut(HELP.join('\n'), '\x1b[90m');
+      const { session, device } = ctx.current;
+      const devType = session.network.devices.find(d => d.id === device)?.type ?? 'switch';
+      writeOut(getHelpForDevice(devType).join('\n'), '\x1b[90m');
     } else if (low === 'clear' || low === 'cls') {
       t.clear();
     } else {
