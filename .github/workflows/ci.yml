@@ -26,8 +26,11 @@ jobs:
       - name: Type-check & build
         run: npm run build
 
+      - name: Engine unit tests
+        run: node dist/tests/index.js
+
       # Determinism gate: every scenario must go fault -> win=false,
-      # reference_solution -> win=true. A broken or unsolvable scenario
-      # fails the build.
+      # reference_solution -> win=true, and pass the fairness checks.
+      # A broken, unsolvable, or unfair scenario fails the build.
       - name: Validate all scenarios
         run: npm run validate

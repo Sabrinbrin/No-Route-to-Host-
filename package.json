@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "vendor:assets": "node scripts/vendor-assets.mjs",
+    "test": "tsc -p tsconfig.json && node dist/tests/index.js",
     "validate": "node dist/validator/index.js",
     "validate:hook": "node dist/hooks/index.js",
     "watch:scenarios": "node dist/hooks/index.js --watch",
