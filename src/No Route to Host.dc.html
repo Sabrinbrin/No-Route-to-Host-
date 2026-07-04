@@ -355,7 +355,12 @@
       <div style="flex:none;background:#fff;border-bottom:1px solid #E3E7EE;padding:13px 22px;display:flex;align-items:center;gap:14px">
         <div>
           <div style="font-size:15px;font-weight:600;letter-spacing:-.2px">Author studio</div>
-          <div style="font-size:12.5px;color:#5B6472">scenarios/01-wrong-access-vlan.yaml</div>
+          <div style="font-size:12.5px;color:#5B6472">scenarios/{{ authorFile }}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <sc-for list="{{ authorScenarios }}" as="as" hint-placeholder-count="4">
+            <div onClick="{{ as.select }}" style="{{ as.style }}">{{ as.label }}</div>
+          </sc-for>
         </div>
         <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
           <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#5B6472">
@@ -369,7 +374,7 @@
         <!-- editor -->
         <div style="background:#0E1116;display:flex;flex-direction:column;min-height:0;min-width:0">
           <div style="height:40px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid #21262d">
-            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#E6EDF3">01-wrong-access-vlan.yaml</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#E6EDF3">{{ authorFile }}</span>
             <span style="font-size:11px;color:#F5A623;background:rgba(245,166,35,.14);padding:2px 8px;border-radius:6px">● unsaved</span>
             <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
               <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8B949E">inject fault:</span>
@@ -498,6 +503,7 @@ class Component extends DCLogic {
     ticket: null,
     topology: null,
     accessVlan: 20,
+    authorScenarioId: "wrong-access-vlan",
     mcpOnline: false,
   };
 
@@ -641,7 +647,7 @@ class Component extends DCLogic {
     if (bm === 'correct') {
       // REAL validation via backend API
       try {
-        const result = await this.api('validate', { id: 'wrong-access-vlan' });
+        const result = await this.api('validate', { id: this.state.authorScenarioId });
         if (result.steps) {
           let i = 0;
           const step = () => {
@@ -751,7 +757,16 @@ class Component extends DCLogic {
     // Port label from topology
     const portLabel = s.solved ? 'Fixed \u2713' : 'Fault present \u2717';
     const portBadgeStyle = "margin-top:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;" + (s.solved ? 'color:#0e7a3d;background:rgba(18,161,80,.1)' : 'color:#b21f24;background:rgba(229,72,77,.1)');
-    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),mcpDotStyle:'width:6px;height:6px;border-radius:50%;background:'+(s.mcpOnline?'#12A150':'#E5484D'),mcpStatusText:s.mcpOnline?'MCP engine online':'MCP engine offline',scenarios,scenarioNum,ticketId,scenarioTitle,ticketTitle,ticketSymptom,winConditionText,terminalTitle,topoNodes,debriefFault,debriefWhy,portLabel,portBadgeStyle,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
+    // Author studio bindings
+    const authorScenarioId = s.authorScenarioId || "wrong-access-vlan";
+    const authorFileMap = {"wrong-access-vlan":"01-wrong-access-vlan.json","trunk-allowed-list":"02-trunk-allowed-list.json","inter-vlan-routing":"03-inter-vlan-routing.json","missing-default-route":"04-missing-default-route.json","firewall-tunnel":"05-firewall-tunnel.json","aws-security-group":"06-aws-security-group.json","aws-route-table":"07-aws-route-table.json","aws-nacl-deny":"08-aws-nacl-deny.json","linux-iptables":"09-linux-iptables.json","docker-networking":"10-docker-networking.json","windows-firewall":"11-windows-firewall.json"};
+    const authorFile = authorFileMap[authorScenarioId] || authorScenarioId + ".json";
+    const authorScenarios = meta.map(m => ({
+      label: m.n + ". " + m.title.substring(0, 18),
+      select: () => this.setState({authorScenarioId: m.id, authorStatus: "idle", agentSteps: []}),
+      style: "font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'IBM Plex Mono',monospace;" + (m.id === authorScenarioId ? "background:#2E5CFF;color:#fff" : "background:#F4F6FA;color:#5B6472;border:1px solid #E3E7EE"),
+    }));
+    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),mcpDotStyle:'width:6px;height:6px;border-radius:50%;background:'+(s.mcpOnline?'#12A150':'#E5484D'),mcpStatusText:s.mcpOnline?'MCP engine online':'MCP engine offline',scenarios,scenarioNum,ticketId,scenarioTitle,ticketTitle,ticketSymptom,winConditionText,terminalTitle,topoNodes,debriefFault,debriefWhy,portLabel,portBadgeStyle,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),authorFile,authorScenarios,breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
   }
 
   _yamlColor(t){
