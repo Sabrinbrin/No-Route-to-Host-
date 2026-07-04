@@ -87,7 +87,7 @@ export function App() {
 
       {solved && session && (
         <Debrief
-          title={session.scenario.title}
+          scenario={session.scenario}
           seconds={finalTime ?? elapsed}
           commands={session.commandCount}
           onNext={() => { setSolved(false); setScreen('dashboard'); }}
@@ -165,20 +165,101 @@ function Play(props: {
   );
 }
 
-function Debrief({ title, seconds, commands, onNext }: { title: string; seconds: number; commands: number; onNext: () => void }) {
+function Debrief({ scenario, seconds, commands, onNext }: { scenario: any; seconds: number; commands: number; onNext: () => void }) {
   const grade = seconds < 90 && commands < 12 ? 'A' : seconds < 180 && commands < 20 ? 'B' : seconds < 300 ? 'C' : 'D';
   const color = grade === 'A' ? 'var(--green)' : grade === 'B' ? 'var(--accent)' : grade === 'C' ? 'var(--amber)' : 'var(--red)';
+  const explanation = getExplanation(scenario.id);
   return (
     <div className="overlay">
-      <div className="modal">
-        <h2>Ticket resolved</h2>
-        <div className="sub" style={{ margin: 0 }}>{title}</div>
-        <div className="grade" style={{ color }}>{grade}</div>
-        <div className="sub" style={{ margin: 0 }}>{seconds}s · {commands} commands</div>
-        <div className="row">
+      <div className="modal" style={{ maxWidth: 620, textAlign: 'left' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div className="grade" style={{ color, margin: 0, fontSize: 38 }}>{grade}</div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, color: 'var(--green)' }}>Ticket resolved</h2>
+            <div className="sub" style={{ margin: '2px 0 0' }}>{scenario.title} · {seconds}s · {commands} commands</div>
+          </div>
+        </div>
+
+        {explanation && (
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--accent)', marginBottom: 8 }}>Why this fix works</div>
+            <p style={{ fontSize: 13.5, lineHeight: 1.7, margin: '0 0 12px', color: 'var(--ink)' }}>{explanation.why}</p>
+
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--amber)', marginBottom: 6 }}>The underlying concept</div>
+            <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 12px', color: 'var(--muted)' }}>{explanation.concept}</p>
+
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--red)', marginBottom: 6 }}>In production</div>
+            <p style={{ fontSize: 13, lineHeight: 1.6, margin: 0, color: 'var(--muted)' }}>{explanation.production}</p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
           <button className="btn primary" onClick={onNext}>Next scenario →</button>
         </div>
       </div>
     </div>
   );
+}
+
+interface Explanation { why: string; concept: string; production: string; }
+
+function getExplanation(id: string): Explanation | null {
+  const explanations: Record<string, Explanation> = {
+    'wrong-access-vlan': {
+      why: 'The access port was assigned to VLAN 20, but the host needed VLAN 10 (where the gateway SVI lives). By setting the correct VLAN, the host\'s traffic reaches the SVI and gets routed.',
+      concept: 'Access VLANs determine which broadcast domain a port belongs to. A host can only reach its gateway if they share the same VLAN. This is Layer 2 segmentation — the most common cause of "one host is down" tickets.',
+      production: 'This happens after port moves, cable swaps, or template misapplies. Always verify with "show vlan brief" before blaming Layer 3. In production, you\'d also check the MAC address table to confirm the host is learned on the expected port.',
+    },
+    'trunk-allowed-list': {
+      why: 'The trunk between switches had an allowed-VLAN list that omitted VLAN 30. Traffic for that VLAN was silently dropped at the trunk boundary. Adding it back restored cross-switch connectivity.',
+      concept: 'Trunk links carry multiple VLANs using 802.1Q tagging. The "allowed vlan" list acts as a filter — only listed VLANs traverse the trunk. A missing VLAN means complete isolation between switches for that VLAN.',
+      production: 'This is common after trunk security hardening (only allowing needed VLANs) when a new VLAN is added but the trunk filter isn\'t updated. Check both ends — the list must match on both sides of the trunk.',
+    },
+    'inter-vlan-routing': {
+      why: 'The Layer 3 switch had IP routing enabled, but the VLAN 20 SVI was administratively shut down. Without the SVI up, the switch had no Layer 3 interface in that subnet and couldn\'t route traffic to/from it.',
+      concept: 'Inter-VLAN routing requires a Layer 3 interface (SVI) in each VLAN that needs routing. The SVI acts as the default gateway for hosts in that VLAN. If it\'s down, the VLAN is isolated at Layer 3 even though Layer 2 works fine.',
+      production: 'SVIs can be shut during maintenance or by accident. "show ip int brief" shows SVI status quickly. In production, you\'d also check HSRP/VRRP if the gateway is redundant — the standby might not have taken over.',
+    },
+    'missing-default-route': {
+      why: 'The core router had no default route (0.0.0.0/0) pointing upstream. Internal routing worked because those subnets were directly connected, but any traffic destined for the internet had nowhere to go.',
+      concept: 'A default route is the "route of last resort" — it matches any destination not covered by more specific routes. Without it, the router drops traffic to unknown destinations with "no route to host." It\'s the most critical single route in any network.',
+      production: 'Default routes disappear after router reloads (if not saved), during routing protocol issues, or when a static route\'s next-hop becomes unreachable. Always check "show ip route" first — it\'s the fastest way to spot missing routes.',
+    },
+    'firewall-tunnel': {
+      why: 'The IPsec tunnel was established (Phase 1 + Phase 2 up), but the branch firewall had no policy permitting traffic FROM the HQ subnet TO the branch subnet through the tunnel interface. Firewalls are default-deny — no policy means no traffic.',
+      concept: 'VPN tunnels separate the crypto plane (tunnel establishment) from the traffic plane (what\'s allowed through). A tunnel being "up" only means the devices agreed on encryption — it doesn\'t mean traffic is permitted. Firewall policies must explicitly allow the desired traffic flows.',
+      production: 'This is the #1 "tunnel up but no traffic" issue in production. Verify with packet captures on the tunnel interface and check policy hit counters. Also watch for asymmetric policies — both sides need to permit the traffic.',
+    },
+    'aws-security-group': {
+      why: 'The security group on the app server only allowed TCP/443 inbound. ICMP (ping) was not in the inbound rules, so the VPC silently dropped the ping packets before they reached the instance.',
+      concept: 'AWS Security Groups are stateful firewalls at the instance level. They default-deny all inbound traffic. Each protocol/port must be explicitly allowed. "Stateful" means you only need an inbound rule — return traffic is automatically allowed.',
+      production: 'This is the most common AWS connectivity issue. Use VPC Flow Logs to confirm traffic is being rejected at the SG level. Remember: SGs are stateful (no need for outbound rules for return traffic), but NACLs are stateless (you need both directions).',
+    },
+    'aws-route-table': {
+      why: 'The VPC peering connection was active, but the route table in the prod VPC had no route pointing to the peer VPC\'s CIDR via the peering connection. Without the route, traffic had nowhere to go.',
+      concept: 'VPC Peering connects two VPCs, but it\'s not automatic routing — you must add routes in BOTH VPC route tables pointing to each other\'s CIDR blocks via the peering connection. It\'s a common gotcha: peering is "up" but traffic doesn\'t flow without routes.',
+      production: 'Always check route tables on both sides of a peering connection. Also verify there\'s no overlapping CIDR (peering won\'t work with overlapping address spaces). Use VPC Reachability Analyzer for complex multi-VPC troubleshooting.',
+    },
+    'aws-nacl-deny': {
+      why: 'The NACL on the API subnet allowed TCP inbound (rule 100) but had no rule allowing ICMP inbound. NACLs are stateless — unlike security groups, you need explicit rules for both the request AND response directions.',
+      concept: 'Network ACLs are stateless subnet-level firewalls evaluated by rule number (lowest first). Unlike Security Groups (stateful), NACLs require explicit allow rules in both directions. A common mistake is adding a TCP allow but forgetting ICMP for ping.',
+      production: 'NACL issues are tricky because traffic works for some protocols but not others (since each protocol needs its own rule). Check both inbound AND outbound rules. Use VPC Flow Logs with "REJECT" filter to identify NACL blocks vs SG blocks.',
+    },
+    'linux-iptables': {
+      why: 'The iptables INPUT chain policy was DROP, and while rules existed for SSH (22) and HTTP (80/443), the ICMP accept rule was removed during hardening. The firewall dropped ping packets at the kernel level.',
+      concept: 'iptables processes rules top-to-bottom per chain. When no rule matches, the chain policy applies (ACCEPT or DROP). A DROP policy with no ICMP rule means silent packet loss — the sender gets no response, not even a "rejected" message.',
+      production: 'After iptables hardening, always test ICMP connectivity. Use "iptables -L -n -v" to see hit counters on each rule — zero hits on an expected rule means traffic isn\'t reaching it. Order matters: a DROP rule above your ACCEPT will win.',
+    },
+    'docker-networking': {
+      why: 'An iptables flush removed all rules including the ICMP accept in the INPUT chain. With policy DROP, the host became unreachable from the network. Docker\'s own FORWARD chain rules survived (containers work internally) but host-level INPUT was empty.',
+      concept: 'Docker heavily uses iptables for its networking (NAT, port mapping, container isolation). Flushing iptables to "fix" Docker issues often breaks host connectivity because it removes ALL rules while keeping restrictive chain policies.',
+      production: 'Never "iptables -F" on a production Docker host without checking chain policies first. Use "iptables-save" to backup before changes. Better: use "docker network" commands to troubleshoot Docker networking, not raw iptables.',
+    },
+    'windows-firewall': {
+      why: 'Windows Firewall had an "ICMP Echo Request" allow rule, but it was disabled (Enabled=False). The Domain profile default is Block Inbound, so without an active allow rule, ICMP was silently dropped. Re-enabling the rule restored ping.',
+      concept: 'Windows Firewall evaluates rules per-profile (Domain/Private/Public). Rules can exist but be disabled — "Get-NetFirewallRule" shows the Enabled status. Group Policy refreshes can disable rules, especially after domain migrations.',
+      production: 'After GP refreshes or domain changes, check "Get-NetFirewallRule | Where Enabled -eq False" for recently disabled rules. In production, also check if the firewall profile changed (Domain→Public) which applies different default rules.',
+    },
+  };
+  return explanations[id] ?? null;
 }
