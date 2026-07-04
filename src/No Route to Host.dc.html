@@ -448,9 +448,25 @@ class Component extends DCLogic {
     blank: {color:'#8B949E', height:'6px'},
   };
 
-  banner(){
+  API = (typeof window !== 'undefined' && window.NR2H_API) || '';
+
+  async api(path, body = {}) {
+    try {
+      const res = await fetch(this.API + '/api/' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return await res.json();
+    } catch (e) {
+      return { error: e.message || 'Network error' };
+    }
+  }
+
+  banner(hostname) {
+    const h = hostname || (this.state && this.state.currentHostname) || 'SW1';
     return [
-      {k:'sys', t:'No Route to Host — console session · SW1'},
+      {k:'sys', t:'No Route to Host \u2014 console session \u00b7 ' + h},
       {k:'sys', t:'Type `?` for available commands. Diagnose, then fix.'},
       {k:'blank', t:''},
     ];
@@ -458,9 +474,7 @@ class Component extends DCLogic {
 
   state = {
     screen: this.props.startScreen || 'landing',
-    mode: 'user',
-    accessVlan: 20,
-    lines: this.banner(),
+    lines: this.banner('SW1'),
     inputVal: '',
     solved: false,
     commandsUsed: 0,
@@ -472,17 +486,32 @@ class Component extends DCLogic {
     breakMode: 'correct',
     authorStatus: 'idle',
     agentSteps: [],
+    currentDevice: '',
+    currentHostname: 'SW1',
+    currentMode: 'exec',
+    scenarioList: [],
+    loadedScenario: null,
+    ticket: null,
+    topology: null,
+    accessVlan: 20,
   };
 
   componentDidMount(){
     this._timer = setInterval(()=>{
       if(this.state.screen==='play' && !this.state.solved) this.setState(s=>({tick:s.tick+1}));
     },1000);
-    if(this.state.screen==='play' && !this.state.startedAt) this.setState({startedAt:Date.now()});
+    this.loadScenarios();
   }
   componentWillUnmount(){ clearInterval(this._timer); clearTimeout(this._at); }
 
-  // ---- navigation ----
+  async loadScenarios() {
+    try {
+      const res = await fetch(this.API + '/api/scenarios');
+      const data = await res.json();
+      if (Array.isArray(data)) this.setState({ scenarioList: data });
+    } catch(e) {}
+  }
+
   nav(screen){
     const patch = {screen};
     if(screen==='play' && !this.state.startedAt) patch.startedAt = Date.now();
@@ -491,408 +520,151 @@ class Component extends DCLogic {
   }
 
   scrollDown(){ setTimeout(()=>{ if(this.scrollEl) this.scrollEl.scrollTop = this.scrollEl.scrollHeight; },10); }
-
   push(arr){ this.setState(s=>({lines:[...s.lines, ...arr]})); this.scrollDown(); }
 
-  resetScenario(){
+  async loadAndPlay(scenarioId) {
+    const result = await this.api('load', { id: scenarioId });
+    if (result.error) { alert(result.error); return; }
+    const devices = result.topology && result.topology.devices || [];
+    const firstNetDev = devices.find(d => d.type === 'switch' || d.type === 'router' || d.type === 'firewall') || devices[0];
+    const hostname = firstNetDev ? firstNetDev.hostname : 'SW1';
+    const deviceId = firstNetDev ? firstNetDev.id : '';
+    this.setState({
+      loadedScenario: scenarioId, ticket: result.ticket, topology: result.topology,
+      currentDevice: deviceId, currentHostname: hostname, currentMode: 'exec',
+      lines: this.banner(hostname), inputVal: '', solved: false,
+      commandsUsed: 0, wrongConfig: 0, hintsUsed: 0, tick: 0,
+      startedAt: Date.now(), finalTime: null, accessVlan: 20,
+    });
+    this.nav('play');
+    this.push([
+      {k:'sys', t:'Ticket: ' + (result.ticket ? result.ticket.title : 'Unknown')},
+      {k:'err', t: result.ticket ? result.ticket.symptom : ''},
+      {k:'blank', t:''},
+    ]);
+  }
+
+  async resetScenario(){
     clearTimeout(this._at);
-    this.setState({mode:'user',accessVlan:20,lines:this.banner(),inputVal:'',solved:false,commandsUsed:0,wrongConfig:0,hintsUsed:0,tick:0,startedAt:Date.now(),finalTime:null});
+    if (this.state.loadedScenario) await this.api('reset');
+    const h = this.state.currentHostname || 'SW1';
+    this.setState({currentMode:'exec', lines:this.banner(h), inputVal:'', solved:false, commandsUsed:0, wrongConfig:0, hintsUsed:0, tick:0, startedAt:Date.now(), finalTime:null, accessVlan:20});
     setTimeout(()=>this.inputEl && this.inputEl.focus(), 60);
   }
   replay(){ this.resetScenario(); this.nav('play'); }
 
   promptStr(){
-    const m=this.state.mode;
-    if(m==='user') return 'SW1> ';
-    if(m==='enable') return 'SW1# ';
-    if(m==='config') return 'SW1(config)# ';
-    if(m==='config-if') return 'SW1(config-if)# ';
-    return 'SW1> ';
+    const m = this.state.currentMode;
+    const h = this.state.currentHostname || 'SW1';
+    if(m==='config') return h+'(config)# ';
+    if(m==='config-if') return h+'(config-if)# ';
+    return h+'# ';
   }
 
-  vlanTable(){
-    const v=this.state.accessVlan;
-    const l10 = v===10 ? '10   DATA                             active    Gi0/1, Gi0/2'
-                       : '10   DATA                             active    Gi0/2';
-    const l20 = v===20 ? '20   VLAN0020                         active    Gi0/1'
-                       : '20   VLAN0020                         active    ';
-    return [
-      {k:'out', t:'VLAN Name                             Status    Ports'},
-      {k:'out', t:'---- -------------------------------- --------- ------------------------------'},
-      {k:'out', t:'1    default                          active    '},
-      {k:'out', t:l10},
-      {k:'out', t:l20},
-      {k:'blank', t:''},
-    ];
-  }
-
-  processCommand(raw){
+  async processCommand(raw){
     const cmd = raw.trim();
-    const c = cmd.toLowerCase();
-    const m = this.state.mode;
-    // echo
-    this.push([{k:'input', t:this.promptStr()+cmd}]);
     if(cmd==='') return;
+    this.push([{k:'input', t:this.promptStr()+cmd}]);
     this.setState(s=>({commandsUsed:s.commandsUsed+1}));
-
+    const c = cmd.toLowerCase();
     if(c==='?'||c==='help'){
-      this.push([
-        {k:'sys',t:'Available in this session:'},
-        {k:'out',t:'  show vlan brief            list VLANs and their ports'},
-        {k:'out',t:'  show ip interface brief    interface / SVI status'},
-        {k:'out',t:'  ping <ip>                  test reachability'},
-        {k:'out',t:'  enable → configure terminal → interface Gi0/1'},
-        {k:'out',t:'  switchport access vlan <n> · end · reset'},
-        {k:'blank',t:''},
-      ]); return;
-    }
-    if(c==='clear'||c==='cls'){ this.setState({lines:this.banner()}); return; }
-
-    if(c==='enable'||c==='en'){ this.setState({mode:'enable'}); return; }
-    if(c==='disable'){ this.setState({mode:'user'}); return; }
-
-    if(c==='configure terminal'||c==='conf t'||c==='config t'||c==='configure'||c==='config terminal'){
-      if(m==='user'){ this.setState({mode:'config'}); this.push([{k:'sys',t:'Enter configuration commands, one per line. End with CNTL/Z.'}]); return; }
-      if(m==='enable'){ this.setState({mode:'config'}); this.push([{k:'sys',t:'Enter configuration commands, one per line. End with CNTL/Z.'}]); return; }
-    }
-
-    if(m==='config' && (c==='interface gi0/1'||c==='int gi0/1'||c==='interface gigabitethernet0/1'||c==='int g0/1'||c==='interface g0/1')){
-      this.setState({mode:'config-if'}); return;
-    }
-
-    if(m==='config-if'){
-      const mt = c.match(/switchport access vlan (\d+)/);
-      if(mt){
-        const n = parseInt(mt[1],10);
-        this.setState({accessVlan:n});
-        if(n!==10) this.setState(s=>({wrongConfig:s.wrongConfig+1}));
-        return;
-      }
-      if(c==='switchport mode access'){ return; }
-    }
-
-    if(c==='end'){ this.setState({mode:'enable'}); return; }
-    if(c==='exit'){
-      if(m==='config-if') this.setState({mode:'config'});
-      else if(m==='config') this.setState({mode:'enable'});
-      else if(m==='enable') this.setState({mode:'user'});
+      this.push([{k:'sys',t:'Commands: show interfaces | show vlan brief | show ip route | show running-config'},{k:'out',t:'  ping <ip> | configure terminal | interface <name>'},{k:'out',t:'  switchport access vlan <n> | switchport trunk allowed vlan add <n>'},{k:'out',t:'  ip routing | ip route <net> <mask> <nh> | no shutdown | end | exit'},{k:'blank',t:''}]);
       return;
     }
-
-    if(c==='show vlan brief'||c==='show vlan'){ this.push(this.vlanTable()); return; }
-    if(c==='show ip interface brief'||c==='show ip int brief'){
-      this.push([
-        {k:'out',t:'Interface              IP-Address      OK? Method Status      Protocol'},
-        {k:'out',t:'Vlan10                 10.0.10.1       YES manual up          up'},
-        {k:'out',t:'Vlan20                 10.0.20.1       YES manual up          up'},
-        {k:'out',t:'GigabitEthernet0/1     unassigned      YES unset  up          up'},
-        {k:'out',t:'GigabitEthernet0/2     unassigned      YES unset  up          up'},
-        {k:'out',t:'GigabitEthernet0/24    unassigned      YES unset  up          up'},
-        {k:'blank',t:''},
-      ]); return;
-    }
-
-    const pm = c.match(/^ping\s+(\S+)/);
-    if(pm){
-      const ip = pm[1];
-      if(ip==='10.0.10.1'){
-        this.push([{k:'sys',t:'Sending 5, 100-byte ICMP Echos to 10.0.10.1, timeout is 2 seconds:'}]);
-        if(this.state.accessVlan===10){
-          this.push([
-            {k:'ok',t:'!!!!!'},
-            {k:'ok',t:'Success rate is 100 percent (5/5), round-trip min/avg/max = 1/1/2 ms'},
-            {k:'blank',t:''},
-          ]);
-          this.win();
-        } else {
-          this.push([
-            {k:'err',t:'.....'},
-            {k:'err',t:'Success rate is 0 percent (0/5)'},
-            {k:'blank',t:''},
-          ]);
-        }
-        return;
+    if(c==='clear'||c==='cls'){ this.setState({lines:this.banner(this.state.currentHostname)}); return; }
+    const result = await this.api('command', { device: this.state.currentDevice, command: cmd });
+    if (result.error) { this.push([{k:'err', t:'% ' + result.error}]); return; }
+    if (result.output) {
+      const lines = result.output.split('\n');
+      for (const line of lines) {
+        if (line.includes('Success rate is 100') || line.includes('!!!!!')) this.push([{k:'ok', t:line}]);
+        else if (line.includes('Success rate is 0') || line.includes('.....')) this.push([{k:'err', t:line}]);
+        else if (line.startsWith('%')) this.push([{k:'sys', t:line}]);
+        else this.push([{k:'out', t:line}]);
       }
-      this.push([{k:'sys',t:'Sending 5, 100-byte ICMP Echos to '+ip+', timeout is 2 seconds:'},{k:'out',t:'.....'},{k:'out',t:'Success rate is 0 percent (0/5)'},{k:'blank',t:''}]);
-      return;
     }
-
-    if(m==='config'||m==='config-if') this.setState(s=>({wrongConfig:s.wrongConfig+1}));
-    this.push([{k:'err',t:'% Invalid input — type ? for help'}]);
+    if (result.context) this.setState({ currentMode: result.context.mode || 'exec' });
+    if (result.stateChanged) {
+      const vm = c.match(/switchport access vlan (\d+)/);
+      if (vm) this.setState({ accessVlan: parseInt(vm[1], 10) });
+    }
+    if (result.winCheck && result.winCheck.resolved) this.win();
+    this.push([{k:'blank', t:''}]);
   }
 
   win(){
     if(this.state.solved) return;
     const t = this.elapsed();
     this.setState({solved:true, finalTime:t});
-    setTimeout(()=>{
-      this.push([{k:'info',t:'✓ Reachability restored — Ticket #4471 resolved.'},{k:'sys',t:'Preparing debrief…'}]);
-    },350);
+    setTimeout(()=>this.push([{k:'info',t:'\u2713 Reachability restored \u2014 Ticket resolved.'},{k:'sys',t:'Preparing debrief\u2026'}]),350);
     this._at = setTimeout(()=>this.nav('debrief'), 1800);
   }
 
-  elapsed(){
-    if(this.state.finalTime!=null) return this.state.finalTime;
-    if(!this.state.startedAt) return 0;
-    return Math.floor((Date.now()-this.state.startedAt)/1000);
-  }
+  elapsed(){ if(this.state.finalTime!=null) return this.state.finalTime; if(!this.state.startedAt) return 0; return Math.floor((Date.now()-this.state.startedAt)/1000); }
   fmt(s){ const m=Math.floor(s/60), r=s%60; return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0'); }
-
-  showHint(){
-    if(this.state.hintsUsed>=3) return;
-    this.setState(s=>({hintsUsed:s.hintsUsed+1}));
-  }
-
-  // ---- author ----
+  showHint(){ if(this.state.hintsUsed>=3) return; this.setState(s=>({hintsUsed:s.hintsUsed+1})); }
   setBreak(mode){ this.setState({breakMode:mode, authorStatus:'idle', agentSteps:[]}); }
 
   saveAuthor(){
     clearTimeout(this._at);
     this.setState({authorStatus:'running', agentSteps:[]});
     const bm = this.state.breakMode;
-    const base = [
-      {icon:'↔', title:'get_topology()', detail:'2 devices, 3 links loaded from YAML', state:'ok'},
-      {icon:'✉', title:'get_ticket()', detail:'“Host A can’t reach its gateway 10.0.10.1”', state:'ok'},
-      {icon:'$', title:'run_command() ×3', detail:'replaying reference_solution → SW1', state:'ok'},
-    ];
+    const symptom = this.state.ticket ? this.state.ticket.symptom : "Host A can't reach its gateway";
+    const base = [{icon:'\u2194', title:'get_topology()', detail:'devices + links loaded', state:'ok'},{icon:'\u2709', title:'get_ticket()', detail:'"'+symptom+'"', state:'ok'},{icon:'$', title:'run_command() x3', detail:'replaying reference_solution', state:'ok'}];
     let seq;
-    if(bm==='correct'){
-      seq = [...base,
-        {icon:'✓', title:'check_win_condition()', detail:'ping HostA → 10.0.10.1 = reachable', state:'ok'},
-        {icon:'✓', title:'fairness: symptom ↔ fault', detail:'VLAN mismatch matches “can’t reach gateway”', state:'ok'},
-        {icon:'✓', title:'fairness: no unintended fix', detail:'single disabled condition confirmed', state:'ok'},
-      ];
-    } else if(bm==='broken'){
-      seq = [...base,
-        {icon:'✕', title:'check_win_condition()', detail:'ping HostA → 10.0.10.1 = STILL unreachable', state:'fail'},
-      ];
-    } else {
-      seq = [...base,
-        {icon:'✓', title:'check_win_condition()', detail:'ping HostA → 10.0.10.1 = reachable', state:'ok'},
-        {icon:'✕', title:'fairness: symptom ↔ fault', detail:'ticket says VLAN, injected fault shuts the SVI', state:'fail'},
-      ];
-    }
+    if(bm==='correct') seq = [...base,{icon:'\u2713', title:'check_win_condition()', detail:'ping succeeds', state:'ok'},{icon:'\u2713', title:'fairness: symptom matches fault', detail:'confirmed', state:'ok'},{icon:'\u2713', title:'no unintended fix', detail:'single condition', state:'ok'}];
+    else if(bm==='broken') seq = [...base,{icon:'\u2715', title:'check_win_condition()', detail:'STILL unreachable', state:'fail'}];
+    else seq = [...base,{icon:'\u2713', title:'check_win_condition()', detail:'ping succeeds', state:'ok'},{icon:'\u2715', title:'fairness: symptom mismatch', detail:'ticket/fault disagree', state:'fail'}];
     let i=0;
-    const step=()=>{
-      if(i>=seq.length){
-        this.setState({authorStatus: bm==='correct' ? 'pass':'fail'});
-        return;
-      }
-      this.setState(s=>({agentSteps:[...s.agentSteps, seq[i]]}));
-      i++;
-      this._at = setTimeout(step, 620);
-    };
+    const step=()=>{ if(i>=seq.length){this.setState({authorStatus:bm==='correct'?'pass':'fail'});return;} this.setState(s=>({agentSteps:[...s.agentSteps, seq[i]]})); i++; this._at=setTimeout(step,620); };
     this._at = setTimeout(step, 420);
   }
 
   yaml(){
     const bm=this.state.breakMode;
-    const faultLine = bm==='mismatch'
-      ? {t:'  device: SW1        # was: access vlan → now: SVI shutdown', hi:true}
-      : {t:'  device: SW1', hi:false};
-    const faultSet = bm==='mismatch'
-      ? {t:'  set: { interface: Vlan10, shutdown: true }', hi:true}
-      : {t:'  set: { interface: Gi0/1, switchport_access_vlan: 20 }', hi:false};
-    const refLast = bm==='broken'
-      ? {t:'  - switchport access vlan 30    # wrong VLAN — will not fix', hi:true}
-      : {t:'  - switchport access vlan 10', hi:false};
-    return [
-      {t:'id: vlan-access'},
-      {t:'title: Wrong access VLAN'},
-      {t:'difficulty: starter'},
-      {t:''},
-      {t:'ticket:'},
-      {t:'  symptom: "Host A can\u2019t reach its gateway 10.0.10.1"'},
-      {t:''},
-      {t:'injected_fault:'},
-      faultLine,
-      faultSet,
-      {t:''},
-      {t:'win_condition:'},
-      {t:'  ping: { from: HostA, to: 10.0.10.1 }'},
-      {t:''},
-      {t:'reference_solution:'},
-      {t:'  - configure terminal'},
-      {t:'  - interface Gi0/1'},
-      refLast,
-      {t:'  - end'},
-    ];
+    const faultLine = bm==='mismatch' ? {t:'  device: SW1        # SVI shutdown instead', hi:true} : {t:'  device: SW1', hi:false};
+    const faultSet = bm==='mismatch' ? {t:'  set: { interface: Vlan10, shutdown: true }', hi:true} : {t:'  set: { interface: Gi0/1, switchport_access_vlan: 20 }', hi:false};
+    const refLast = bm==='broken' ? {t:'  - switchport access vlan 30    # wrong!', hi:true} : {t:'  - switchport access vlan 10', hi:false};
+    return [{t:'id: vlan-access'},{t:'title: Wrong access VLAN'},{t:'difficulty: starter'},{t:''},{t:'ticket:'},{t:'  symptom: "Host A can\'t reach its gateway 10.0.10.1"'},{t:''},{t:'injected_fault:'},faultLine,faultSet,{t:''},{t:'win_condition:'},{t:'  ping: { from: HostA, to: 10.0.10.1 }'},{t:''},{t:'reference_solution:'},{t:'  - configure terminal'},{t:'  - interface Gi0/1'},refLast,{t:'  - end'}];
   }
 
-  // ---- refs / inputs ----
   setInputRef(el){ this.inputEl = el; }
   setScrollRef(el){ this.scrollEl = el; }
   focusInput(){ this.inputEl && this.inputEl.focus(); }
   onInput(e){ this.setState({inputVal:e.target.value}); }
-  onKey(e){
-    if(e.key==='Enter'){
-      const v = this.state.inputVal;
-      this.setState({inputVal:''});
-      this.processCommand(v);
-    }
-  }
-
-  navPill(active){
-    return active
-      ? 'font-size:13.5px;font-weight:600;color:#14161B;padding:7px 12px;border-radius:8px;background:#F4F6FA;cursor:pointer'
-      : 'font-size:13.5px;font-weight:500;color:#5B6472;padding:7px 12px;border-radius:8px;cursor:pointer';
-  }
+  onKey(e){ if(e.key==='Enter'){ const v=this.state.inputVal; this.setState({inputVal:''}); this.processCommand(v); } }
+  navPill(active){ return active ? 'font-size:13.5px;font-weight:600;color:#14161B;padding:7px 12px;border-radius:8px;background:#F4F6FA;cursor:pointer' : 'font-size:13.5px;font-weight:500;color:#5B6472;padding:7px 12px;border-radius:8px;cursor:pointer'; }
 
   renderVals(){
     const s = this.state;
     const K = this.KIND;
     const termLines = s.lines.map(l=>({text:l.t, style:{...(K[l.k]||K.out)}}));
     const el = this.elapsed();
-
-    // scenarios
-    const meta = [
-      {n:1,title:'Wrong access VLAN',tag:'Switching',difficulty:'Starter',symptom:'Host A can\u2019t reach its gateway',time:'~4 min',btn:'Start',play:true},
-      {n:2,title:'Trunk allowed-list gap',tag:'Switching',difficulty:'Core',symptom:'VLAN 30 can\u2019t cross to Switch A',time:'~6 min',btn:'Open'},
-      {n:3,title:'Inter-VLAN routing down',tag:'Routing',difficulty:'Core',symptom:'VLAN 10 can\u2019t reach VLAN 20',time:'~6 min',btn:'Open'},
-      {n:4,title:'Missing default route',tag:'Routing',difficulty:'Core',symptom:'Upstream test host unreachable',time:'~7 min',btn:'Open'},
-      {n:5,title:'Tunnel up, traffic blackholed',tag:'Firewall / VPN',difficulty:'Finale',symptom:'IPsec up but no traffic passes',time:'~10 min',btn:'Open'},
-    ];
+    const bl = s.scenarioList;
+    const meta = bl.length > 0 ? bl.map((sc,i)=>({n:i+1,title:sc.title,tag:sc.difficulty<=2?'Switching':sc.difficulty<=3?'Routing':'Firewall / VPN',difficulty:sc.difficulty<=1?'Starter':sc.difficulty<=3?'Core':'Finale',symptom:sc.title,time:'~'+(sc.difficulty*3+2)+' min',btn:i===0?'Start':'Open',play:true,id:sc.id})) : [{n:1,title:'Wrong access VLAN',tag:'Switching',difficulty:'Starter',symptom:"Host A can't reach its gateway",time:'~4 min',btn:'Start',play:true,id:'wrong-access-vlan'},{n:2,title:'Trunk allowed-list gap',tag:'Switching',difficulty:'Core',symptom:'VLAN 30 blocked on trunk',time:'~6 min',btn:'Open',play:true,id:'trunk-allowed-list'},{n:3,title:'Inter-VLAN routing down',tag:'Routing',difficulty:'Core',symptom:"VLAN 10 can't reach VLAN 20",time:'~6 min',btn:'Open',play:true,id:'inter-vlan-routing'},{n:4,title:'Missing default route',tag:'Routing',difficulty:'Core',symptom:'Upstream unreachable',time:'~7 min',btn:'Open',play:true,id:'missing-default-route'},{n:5,title:'Tunnel up, traffic blackholed',tag:'Firewall / VPN',difficulty:'Finale',symptom:'IPsec up but no traffic',time:'~10 min',btn:'Open',play:true,id:'firewall-tunnel'}];
     const diffColors = {Starter:['#12A150','rgba(18,161,80,.1)'],Core:['#1E44C7','rgba(46,92,255,.1)'],Finale:['#B9770F','rgba(245,166,35,.14)']};
-    const scenarios = meta.map(m=>{
-      const dc = diffColors[m.difficulty];
-      return {
-        ...m,
-        open: ()=>{ if(m.play){ this.resetScenario(); this.nav('play'); } else { this.resetScenario(); this.nav('play'); } },
-        cardStyle:'background:#fff;border:1px solid #E3E7EE;border-radius:14px;padding:20px;cursor:pointer;transition:box-shadow .15s,transform .15s;box-shadow:0 1px 2px rgba(20,22,27,.03)',
-        tagStyle:'font-size:11.5px;font-weight:600;color:#5B6472;letter-spacing:.3px;text-transform:uppercase',
-        diffStyle:'font-size:11.5px;font-weight:600;color:'+dc[0]+';background:'+dc[1]+';padding:3px 10px;border-radius:7px',
-        btnStyle:'font-size:13px;font-weight:600;color:'+(m.play?'#2E5CFF':'#5B6472'),
-        btn:m.btn,
-      };
-    });
-
-    // hints
-    const hints = [
-      {cost:'-5',  text:'Start with `show vlan brief` — compare where Gi0/1 lives to where the gateway (VLAN 10) is.'},
-      {cost:'-10', text:'Host A is 10.0.10.5/24; its gateway is the VLAN 10 SVI 10.0.10.1. Gi0/1 is in the wrong VLAN.'},
-      {cost:'-15', text:'Fix: conf t → interface Gi0/1 → switchport access vlan 10, then ping 10.0.10.1.'},
-    ];
+    const scenarios = meta.map(m=>{const dc=diffColors[m.difficulty]||diffColors.Core;return{...m,open:()=>this.loadAndPlay(m.id),cardStyle:'background:#fff;border:1px solid #E3E7EE;border-radius:14px;padding:20px;cursor:pointer;box-shadow:0 1px 2px rgba(20,22,27,.03)',tagStyle:'font-size:11.5px;font-weight:600;color:#5B6472;letter-spacing:.3px;text-transform:uppercase',diffStyle:'font-size:11.5px;font-weight:600;color:'+dc[0]+';background:'+dc[1]+';padding:3px 10px;border-radius:7px',btnStyle:'font-size:13px;font-weight:600;color:'+(m.btn==='Start'?'#2E5CFF':'#5B6472')};});
+    const hints = [{cost:'-5',text:'Start with `show vlan brief` to see port/VLAN assignments.'},{cost:'-10',text:'Compare the host port VLAN with the gateway SVI VLAN.'},{cost:'-15',text:'Fix: conf t > interface <port> > switchport access vlan <correct>, then ping.'}];
     const shownHints = hints.slice(0, s.hintsUsed);
-
-    // score
-    const wrong = s.wrongConfig, hu = s.hintsUsed, cu = s.commandsUsed;
-    const ideal = 4;
-    const extra = Math.max(0, cu - ideal);
-    let score = 1000 - wrong*60 - hu*40 - extra*15 - Math.min(120, Math.floor(el/6));
+    const cu=s.commandsUsed, wrong=s.wrongConfig, hu=s.hintsUsed;
+    let score = 1000 - wrong*60 - hu*40 - Math.max(0,cu-4)*15 - Math.min(120,Math.floor(el/6));
     score = Math.max(200, Math.min(1000, score));
-    const pct = score/1000;
-    const circ = 2*Math.PI*60;
-    const scoreDash = (circ*pct).toFixed(1)+' '+circ.toFixed(1);
-    const grade = score>=900?'A':score>=800?'A-':score>=700?'B+':score>=600?'B':score>=450?'C':'D';
-    const scoreColor = score>=800?'#3FB950':score>=600?'#F5A623':'#F85149';
-
-    const debriefSteps = [
-      {n:1,cmd:'ping 10.0.10.1',why:'Confirm the reported symptom — gateway times out.'},
-      {n:2,cmd:'show vlan brief',why:'See Gi0/1 sitting in VLAN 20 instead of VLAN 10.'},
-      {n:3,cmd:'interface Gi0/1 · switchport access vlan 10',why:'Move the access port into the correct data VLAN.'},
-      {n:4,cmd:'ping 10.0.10.1',why:'Re-test — 5/5, win condition satisfied.'},
-    ];
-    const dSteps = debriefSteps.map((d,i)=>({...d, lineStyle:'width:2px;flex:1;background:'+(i<debriefSteps.length-1?'#EAF0FF':'transparent')}));
-
-    // author
-    const bm = s.breakMode;
-    const breakDefs = [
-      {key:'correct',label:'correct'},
-      {key:'broken',label:'break reference'},
-      {key:'mismatch',label:'symptom mismatch'},
-    ];
-    const breakOptions = breakDefs.map(b=>({
-      label:b.label,
-      pick:()=>this.setBreak(b.key),
-      style:'font-family:\'IBM Plex Mono\',monospace;font-size:11px;padding:3px 9px;border-radius:6px;cursor:pointer;'+(bm===b.key?'background:'+(b.key==='correct'?'#1f6f3f':'#7a2b2f')+';color:#fff':'background:#21262d;color:#8B949E'),
-    }));
-    const yamlLines = this.yaml().map((y,i)=>({
-      n:i+1, text:y.t,
-      rowStyle:'display:flex;padding:0 12px;'+(y.hi?'background:rgba(245,166,35,.1)':''),
-      textStyle:'white-space:pre-wrap;color:'+(y.hi?'#F5A623':this._yamlColor(y.t)),
-    }));
-
-    const running = s.authorStatus==='running';
-    const agentSteps = s.agentSteps.map(st=>({
-      title:st.title, detail:st.detail,
-      icon:st.icon,
-      bg: st.state==='fail'?'rgba(229,72,77,.08)':'#fff',
-      iconStyle:'flex:none;width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:'+(st.state==='fail'?'#E5484D':'#12A150'),
-    }));
-
+    const circ=2*Math.PI*60; const scoreDash=(circ*score/1000).toFixed(1)+' '+circ.toFixed(1);
+    const grade=score>=900?'A':score>=800?'A-':score>=700?'B+':score>=600?'B':score>=450?'C':'D';
+    const scoreColor=score>=800?'#3FB950':score>=600?'#F5A623':'#F85149';
+    const debriefSteps=[{n:1,cmd:'show vlan brief / show interfaces',why:'Identify the misconfiguration.'},{n:2,cmd:'ping <target>',why:'Confirm the symptom.'},{n:3,cmd:'configure terminal > fix',why:'Apply the correct config change.'},{n:4,cmd:'ping <target>',why:'Verify the fix.'}];
+    const dSteps=debriefSteps.map((d,i)=>({...d,lineStyle:'width:2px;flex:1;background:'+(i<debriefSteps.length-1?'#EAF0FF':'transparent')}));
+    const bm=s.breakMode;
+    const breakOptions=[{key:'correct',label:'correct'},{key:'broken',label:'break reference'},{key:'mismatch',label:'symptom mismatch'}].map(b=>({label:b.label,pick:()=>this.setBreak(b.key),style:"font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 9px;border-radius:6px;cursor:pointer;"+(bm===b.key?'background:'+(b.key==='correct'?'#1f6f3f':'#7a2b2f')+';color:#fff':'background:#21262d;color:#8B949E')}));
+    const yamlLines=this.yaml().map((y,i)=>({n:i+1,text:y.t,rowStyle:'display:flex;padding:0 12px;'+(y.hi?'background:rgba(245,166,35,.1)':''),textStyle:'white-space:pre-wrap;color:'+(y.hi?'#F5A623':this._yamlColor(y.t))}));
+    const running=s.authorStatus==='running';
+    const agentSteps=s.agentSteps.map(st=>({title:st.title,detail:st.detail,icon:st.icon,bg:st.state==='fail'?'rgba(229,72,77,.08)':'#fff',iconStyle:'flex:none;width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:'+(st.state==='fail'?'#E5484D':'#12A150')}));
     let verdictTitle,verdictSub,verdictIcon,vBg,vColor;
-    if(s.authorStatus==='idle'){ verdictTitle='Ready to validate'; verdictSub='Hit Save to run the on-save hook.'; verdictIcon='•'; vBg='#fff'; vColor='#5B6472'; }
-    else if(running){ verdictTitle='Agent playing scenario…'; verdictSub='Driving the simulation through MCP tools.'; verdictIcon='↻'; vBg='#EAF0FF'; vColor='#1E44C7'; }
-    else if(s.authorStatus==='pass'){ verdictTitle='PASS · solvable in 3 steps, fair'; verdictSub='Every fairness rule satisfied. Safe to ship to students.'; verdictIcon='✓'; vBg='rgba(18,161,80,.1)'; vColor='#0e7a3d'; }
-    else { verdictTitle= bm==='broken'?'FAIL · unsolvable':'FAIL · symptom mismatch'; verdictSub= bm==='broken'?'Reference solution does not restore reachability.':'Ticket symptom does not match the injected fault.'; verdictIcon='✕'; vBg='rgba(229,72,77,.1)'; vColor='#b21f24'; }
-
-    return {
-      // chrome / nav
-      showChrome: s.screen!=='landing',
-      isLanding: s.screen==='landing',
-      isDashboard: s.screen==='dashboard',
-      isPlay: s.screen==='play',
-      isDebrief: s.screen==='debrief',
-      isAuthor: s.screen==='author',
-      goHome: ()=>this.nav('landing'),
-      goDash: ()=>this.nav('dashboard'),
-      goAuthor: ()=>this.nav('author'),
-      goPlay: ()=>{ this.resetScenario(); this.nav('play'); },
-      navScenariosStyle: this.navPill(s.screen==='dashboard'),
-      navAuthorStyle: this.navPill(s.screen==='author'),
-
-      // dashboard
-      scenarios,
-
-      // play
-      termLines,
-      prompt: this.promptStr(),
-      inputVal: s.inputVal,
-      onInput: this.onInput.bind(this),
-      onKey: this.onKey.bind(this),
-      setInputRef: this.setInputRef.bind(this),
-      setScrollRef: this.setScrollRef.bind(this),
-      focusInput: this.focusInput.bind(this),
-      resetScenario: this.resetScenario.bind(this),
-      timerVisible: this.props.timerVisible!==false,
-      clock: this.fmt(el),
-      statusPillText: s.solved?'Resolved':'Investigating',
-      statusPillStyle: s.solved
-        ? 'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px'
-        : 'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',
-      linkColor: s.solved?'#12A150':'#E5484D',
-      linkAnim: s.solved?'none':'pulseline 1.4s ease-in-out infinite',
-      swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',
-      portLabel:(s.accessVlan===10?'VLAN 10 ✓':'VLAN '+s.accessVlan+' ✗'),
-      portBadgeStyle:'margin-top:14px;text-align:center;font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;'+(s.accessVlan===10?'color:#0e7a3d;background:rgba(18,161,80,.1)':'color:#b21f24;background:rgba(229,72,77,.1)'),
-      hintsEnabled: this.props.showHints!==false,
-      shownHints,
-      showHint: this.showHint.bind(this),
-      hintBtnLabel: s.hintsUsed>=3?'no more hints':(s.hintsUsed===0?'Reveal a hint':'Reveal next hint'),
-      hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),
-
-      // debrief
-      debriefSteps: dSteps,
-      score, scoreDash, scoreColor, grade,
-      scoreRows: [
-        {label:'Commands used', val:String(cu)},
-        {label:'Wrong config attempts', val:String(wrong)},
-        {label:'Hints taken', val:String(hu)},
-        {label:'Time', val:this.fmt(s.finalTime!=null?s.finalTime:el)},
-      ],
-      replay: this.replay.bind(this),
-
-      // author
-      breakOptions,
-      yamlLines,
-      saveAuthor: this.saveAuthor.bind(this),
-      saveBtnLabel: running?'Validating…':'Save',
-      saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),
-      agentSteps,
-      verdictTitle, verdictSub, verdictIcon,
-      verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),
-      verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':''),
-    };
+    if(s.authorStatus==='idle'){verdictTitle='Ready to validate';verdictSub='Hit Save to run the on-save hook.';verdictIcon='\u2022';vBg='#fff';vColor='#5B6472';}
+    else if(running){verdictTitle='Agent playing scenario\u2026';verdictSub='Driving the simulation through MCP tools.';verdictIcon='\u21bb';vBg='#EAF0FF';vColor='#1E44C7';}
+    else if(s.authorStatus==='pass'){verdictTitle='PASS \u00b7 solvable, fair';verdictSub='Every fairness rule satisfied.';verdictIcon='\u2713';vBg='rgba(18,161,80,.1)';vColor='#0e7a3d';}
+    else{verdictTitle=bm==='broken'?'FAIL \u00b7 unsolvable':'FAIL \u00b7 symptom mismatch';verdictSub=bm==='broken'?'Reference solution does not fix it.':'Ticket/fault disagree.';verdictIcon='\u2715';vBg='rgba(229,72,77,.1)';vColor='#b21f24';}
+    return {showChrome:s.screen!=='landing',isLanding:s.screen==='landing',isDashboard:s.screen==='dashboard',isPlay:s.screen==='play',isDebrief:s.screen==='debrief',isAuthor:s.screen==='author',goHome:()=>this.nav('landing'),goDash:()=>this.nav('dashboard'),goAuthor:()=>this.nav('author'),goPlay:()=>this.loadAndPlay('wrong-access-vlan'),navScenariosStyle:this.navPill(s.screen==='dashboard'),navAuthorStyle:this.navPill(s.screen==='author'),scenarios,termLines,prompt:this.promptStr(),inputVal:s.inputVal,onInput:this.onInput.bind(this),onKey:this.onKey.bind(this),setInputRef:this.setInputRef.bind(this),setScrollRef:this.setScrollRef.bind(this),focusInput:this.focusInput.bind(this),resetScenario:this.resetScenario.bind(this),timerVisible:this.props.timerVisible!==false,clock:this.fmt(el),statusPillText:s.solved?'Resolved':'Investigating',statusPillStyle:s.solved?'font-size:12px;font-weight:600;color:#0e7a3d;background:rgba(18,161,80,.12);padding:5px 11px;border-radius:8px':'font-size:12px;font-weight:600;color:#B9770F;background:rgba(245,166,35,.14);padding:5px 11px;border-radius:8px',linkColor:s.solved?'#12A150':'#E5484D',linkAnim:s.solved?'none':'pulseline 1.4s ease-in-out infinite',swBoxStyle:'width:52px;height:44px;border-radius:9px;border:1.5px solid '+(s.solved?'#12A150':'#C7CEDA')+';background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px',portLabel:s.accessVlan===10?'VLAN 10 \u2713':'VLAN '+s.accessVlan+' \u2717',portBadgeStyle:"margin-top:14px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;padding:6px;border-radius:8px;"+(s.accessVlan===10?'color:#0e7a3d;background:rgba(18,161,80,.1)':'color:#b21f24;background:rgba(229,72,77,.1)'),hintsEnabled:this.props.showHints!==false,shownHints,showHint:this.showHint.bind(this),hintBtnLabel:s.hintsUsed>=3?'no more hints':s.hintsUsed===0?'Reveal a hint':'Reveal next hint',hintBtnStyle:'margin-top:12px;text-align:center;font-size:12.5px;font-weight:600;padding:9px;border-radius:9px;cursor:'+(s.hintsUsed>=3?'default':'pointer')+';'+(s.hintsUsed>=3?'color:#8B949E;background:#F4F6FA':'color:#B9770F;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3)'),debriefSteps:dSteps,score,scoreDash,scoreColor,grade,scoreRows:[{label:'Commands used',val:String(cu)},{label:'Wrong config attempts',val:String(wrong)},{label:'Hints taken',val:String(hu)},{label:'Time',val:this.fmt(s.finalTime!=null?s.finalTime:el)}],replay:this.replay.bind(this),breakOptions,yamlLines,saveAuthor:this.saveAuthor.bind(this),saveBtnLabel:running?'Validating\u2026':'Save',saveBtnStyle:'font-size:13.5px;font-weight:600;color:#fff;background:'+(running?'#8892a0':'#2E5CFF')+';padding:8px 18px;border-radius:9px;cursor:'+(running?'default':'pointer'),agentSteps,verdictTitle,verdictSub,verdictIcon,verdictStyle:'margin-top:16px;border-radius:12px;padding:14px 16px;color:'+vColor+';background:'+vBg+';border:1px solid '+(vBg==='#fff'?'#E3E7EE':'transparent'),verdictIconStyle:'width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:none;background:'+vColor+(running?';animation:spin 1s linear infinite':'')};
   }
 
   _yamlColor(t){
@@ -902,6 +674,7 @@ class Component extends DCLogic {
     return '#C9D1D9';
   }
 }
+
 </script>
 </body>
 </html>

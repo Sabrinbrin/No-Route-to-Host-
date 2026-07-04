@@ -128,7 +128,8 @@ function handleApi(path: string, body: any): any {
 
 // ===== HTTP Server =====
 const publicDir = resolve(process.cwd(), 'public');
-const PORT = 3000;
+const srcDir = resolve(process.cwd(), 'src');
+const PORT = parseInt(process.env['PORT'] || '3000', 10);
 
 const server = createServer((req, res) => {
   const url = req.url || '/';
@@ -172,6 +173,35 @@ const server = createServer((req, res) => {
 
   // Static file serving
   let filePath = url === '/' ? '/index.html' : url;
+
+  // Serve the DC game UI at /game
+  if (url === '/game' || url === '/game/') {
+    const dcPath = join(srcDir, 'No Route to Host.dc.html');
+    try {
+      const content = readFileSync(dcPath, 'utf-8');
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(content);
+    } catch {
+      res.writeHead(404);
+      res.end('DC HTML not found');
+    }
+    return;
+  }
+
+  // Serve support.js from src/
+  if (url === '/support.js' || url === './support.js') {
+    const sjPath = join(srcDir, 'support.js');
+    try {
+      const content = readFileSync(sjPath, 'utf-8');
+      res.writeHead(200, { 'Content-Type': 'application/javascript' });
+      res.end(content);
+    } catch {
+      res.writeHead(404);
+      res.end('support.js not found');
+    }
+    return;
+  }
+
   const fullPath = join(publicDir, filePath);
 
   try {
